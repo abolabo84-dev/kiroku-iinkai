@@ -454,15 +454,37 @@ async function deletePhotoRemote(id){ if(!getToken()) return; try{
   const sha=(await r.json()).sha;
   await fetch(ghUrl(p),{method:"DELETE",headers:ghHdr(),
     body:JSON.stringify({message:"del photo",sha,branch:"main"})}); }catch(e){} }
+// 撮影ガイド（最初の3回はコツを見せてから撮る）
+function showPhotoGuide(onOk){
+  const ov=document.createElement("div");
+  ov.style.cssText="position:fixed;inset:0;background:rgba(47,92,77,.55);z-index:98;display:flex;align-items:center;justify-content:center;padding:20px";
+  ov.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:420px;padding:18px 20px">
+    <h2 style="font-size:1rem;color:#2f5c4d;margin:0 0 8px">📷 じょうずな撮りかたのコツ</h2>
+    <ul style="font-size:.88rem;line-height:1.9;padding-left:1.3em;margin:0 0 6px">
+      <li>☀️ 明るい場所で、<b>かげが入らない</b>ように</li>
+      <li>⬆️ <b>真上から</b>、ページ全体をおさめる</li>
+      <li>📄 1回に<b>1ページずつ</b>（見開きは2枚に分けて）</li>
+      <li>⭕ <b>まるつけのあと</b>に撮ると、あとでまちがいの分析に役立つよ</li>
+    </ul>
+    <p style="font-size:.72rem;color:#98a49e;margin:0 0 10px">きれいに撮れてると、AIの先輩がノートを読んで分析できるようになるんだ</p>
+    <button id="pg-ok" class="btn-main" style="margin-top:0">わかった！さつえいする</button></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#pg-ok").onclick=()=>{ ov.remove(); onOk(); }; }
+function photoWithGuide(fileInputId){
+  const n=+(localStorage.getItem("kiroku-pg")||0);
+  const open=()=>document.getElementById(fileInputId).click();
+  if(n<3){ localStorage.setItem("kiroku-pg",String(n+1)); logEv("photo-guide",{n});
+    showPhotoGuide(open); }
+  else open(); }
 // タイマー側の写真ボタン
-document.getElementById("t-photo").onclick=()=>document.getElementById("t-photo-file").click();
+document.getElementById("t-photo").onclick=()=>photoWithGuide("t-photo-file");
 document.getElementById("t-photo-file").onchange=async ev=>{
   const f=ev.target.files[0]; if(!f||!lastTimerEntryId) return;
   await attachPhoto(f, lastTimerEntryId);
   document.getElementById("t-photo-done").style.display="block"; ev.target.value=""; };
 // 手入力側の写真ボタン（保存時にひもづけ）
 let mPhotoFile=null;
-document.getElementById("m-photo").onclick=()=>document.getElementById("m-photo-file").click();
+document.getElementById("m-photo").onclick=()=>photoWithGuide("m-photo-file");
 document.getElementById("m-photo-file").onchange=ev=>{
   mPhotoFile=ev.target.files[0]||null;
   document.getElementById("m-photo-done").style.display=mPhotoFile?"block":"none"; };
