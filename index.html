@@ -118,6 +118,12 @@
       </div>
       <label>メモ（まちがえた問題・気づいたこと）</label>
       <textarea id="t-memo"></textarea>
+      <label>ノートで勉強したら</label>
+      <div class="io-row">
+        <button id="t-photo">📷 ノートの写真をつける</button>
+      </div>
+      <p class="small" id="t-photo-done" style="display:none">✅ 写真をつけたよ</p>
+      <input type="file" id="t-photo-file" accept="image/*" style="display:none">
       <button class="btn-main" id="t-done">きろく完了！</button>
     </div>
   </div>
@@ -141,11 +147,13 @@
     </div>
     <label>メモ（まちがえた問題・気づいたこと）</label>
     <textarea id="m-memo"></textarea>
+    <label>ノートで勉強したら</label>
+    <div class="io-row">
+      <button id="m-photo">📷 ノートの写真をつける</button>
+    </div>
+    <p class="small" id="m-photo-done" style="display:none">✅ 写真をつけたよ</p>
+    <input type="file" id="m-photo-file" accept="image/*" style="display:none">
     <button class="btn-main" id="m-save">記録する</button>
-  </div>
-  <div class="card">
-    <h2>📷 ノートの写真（v1で実装予定）</h2>
-    <p class="small">紙のノートで勉強したら、パシャッと撮って自動で読み取り→記録＆分析する機能をここに入れる予定。今はメモ欄に書いておいてね。</p>
   </div>
 </section>
 
@@ -280,6 +288,7 @@ bStop.onclick=()=>{
   entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject}); scheduleSync();
   lastTimerEntryId=e.id;
   document.getElementById("t-result").textContent=`${e.subject} ${mins}分 を記録したよ 🩹`;
+  document.getElementById("t-photo-done").style.display="none";
   document.getElementById("timer-after").style.display="block";
   timerState={running:false,startTs:null,acc:0,events:[]}; disp.textContent="00:00:00";
   bStart.disabled=false; bStart.textContent="スタート"; bPause.disabled=true; bStop.disabled=true;
@@ -310,6 +319,8 @@ document.getElementById("m-save").onclick=()=>{
     unit:document.getElementById("m-unit").value.trim(), minutes:mins, source:"manual",
     rating:mRating, memo:document.getElementById("m-memo").value.trim() };
   entries.push(e); store.save(entries); logEv("entry-manual",{mins,subject:subj}); scheduleSync();
+  if(mPhotoFile){ attachPhoto(mPhotoFile, e.id); mPhotoFile=null;
+    document.getElementById("m-photo-done").style.display="none"; }
   alert("記録したよ！えらい！ 🩹");
   document.getElementById("m-unit").value=""; document.getElementById("m-mins").value="";
   document.getElementById("m-memo").value=""; mRating=null;
@@ -341,13 +352,18 @@ function renderDay(){
   const list=entries.filter(e=>e.date===selDate);
   document.getElementById("day-entries").innerHTML = list.length? list.map(e=>
     `<div class="entry"><div><b>${e.subject}</b> ${e.unit||""}
-      <div class="meta">${e.minutes}分・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${e.memo?`<br>📝${e.memo}`:""}</div></div>
+      <div class="meta">${e.minutes}分・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${e.photo?` <button class="pv" data-id="${e.id}" style="border:1px solid var(--mint-deep);background:#fff;border-radius:8px;padding:1px 8px;cursor:pointer">📷 しゃしん</button>`:""}${e.memo?`<br>📝${e.memo}`:""}</div></div>
       <button class="del" data-id="${e.id}">🗑</button></div>`).join("")
     : '<p class="small">この日の記録はまだないよ</p>';
+  document.querySelectorAll("#day-entries .pv").forEach(b=>{
+    b.onclick=()=>openPhoto(+b.dataset.id); });
   document.querySelectorAll("#day-entries .del").forEach(b=>{
     b.onclick=()=>{ if(confirm("この記録を消す？")){
-      const id=+b.dataset.id; entries=entries.filter(e=>e.id!==id);
-      deletedIds.push(id); saveDeleted(); store.save(entries); renderCal(); scheduleSync(); } }; }); }
+      const id=+b.dataset.id; const hadPhoto=entries.some(e=>e.id===id&&e.photo);
+      entries=entries.filter(e=>e.id!==id);
+      deletedIds.push(id); saveDeleted(); store.save(entries); renderCal(); scheduleSync();
+      if(hadPhoto){ idbDel(id).catch(()=>{}); deletePhotoRemote(id);
+        photoQueue=photoQueue.filter(x=>x!==id); savePhotoQ(); } } }; }); }
 
 // ---- ぶんせき ----
 function renderStats(){
@@ -384,6 +400,72 @@ document.getElementById("import-file").onchange=ev=>{
     inc.forEach(e=>{ if(!ids.has(e.id)) entries.push(e); });
     store.save(entries); alert(`読み込んだよ（合計 ${entries.length}件）`); renderCal();
   }catch(e){ alert("読み込めなかった…ファイルを確認してね"); } }; r.readAsText(f); };
+
+// ---- 写真（縮小→IndexedDBに保存→同期でアップロード） ----
+let idb=null;
+function idbOpen(){ return new Promise((res,rej)=>{ if(idb) return res(idb);
+  const q=indexedDB.open("kiroku",1);
+  q.onupgradeneeded=()=>q.result.createObjectStore("photos");
+  q.onsuccess=()=>{ idb=q.result; res(idb); }; q.onerror=()=>rej(q.error); }); }
+function idbPut(k,v){ return idbOpen().then(db=>new Promise((res,rej)=>{
+  const t=db.transaction("photos","readwrite"); t.objectStore("photos").put(v,k);
+  t.oncomplete=res; t.onerror=()=>rej(t.error); })); }
+function idbGet(k){ return idbOpen().then(db=>new Promise((res,rej)=>{
+  const r=db.transaction("photos").objectStore("photos").get(k);
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); })); }
+function idbDel(k){ return idbOpen().then(db=>new Promise((res,rej)=>{
+  const t=db.transaction("photos","readwrite"); t.objectStore("photos").delete(k);
+  t.oncomplete=res; t.onerror=()=>rej(t.error); })); }
+function compressPhoto(file){ return new Promise((res,rej)=>{
+  const r=new FileReader();
+  r.onload=()=>{ const img=new Image();
+    img.onload=()=>{ const max=1280, sc=Math.min(1, max/Math.max(img.width,img.height));
+      const c=document.createElement("canvas");
+      c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      res(c.toDataURL("image/jpeg",0.72)); };
+    img.onerror=rej; img.src=r.result; };
+  r.onerror=rej; r.readAsDataURL(file); }); }
+let photoQueue=[];
+try{ photoQueue=JSON.parse(localStorage.getItem("kiroku-photoq")||"[]"); }catch(e){}
+function savePhotoQ(){ localStorage.setItem("kiroku-photoq", JSON.stringify(photoQueue)); }
+async function attachPhoto(file, entryId){
+  const durl=await compressPhoto(file);
+  await idbPut(entryId, durl);
+  const e=entries.find(x=>x.id===entryId);
+  if(e){ e.photo=true; store.save(entries); }
+  if(!photoQueue.includes(entryId)){ photoQueue.push(entryId); savePhotoQ(); }
+  logEv("photo-attach",{entryId}); scheduleSync(); }
+async function openPhoto(id){
+  let durl=await idbGet(id).catch(()=>null);
+  if(!durl && getToken()){ try{
+    const r=await fetch(ghUrl(`photos/${id}.jpg`),{headers:{...ghHdr(),"Accept":"application/vnd.github.raw"}});
+    if(r.ok){ const blob=await r.blob();
+      durl=await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob); });
+      idbPut(id,durl); } }catch(e){} }
+  if(!durl){ alert("写真が見つからへん…（ほかの端末の同期待ちかも）"); return; }
+  const ov=document.createElement("div");
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px";
+  ov.innerHTML=`<img src="${durl}" style="max-width:100%;max-height:100%;border-radius:12px">`;
+  ov.onclick=()=>ov.remove(); document.body.appendChild(ov); }
+async function deletePhotoRemote(id){ if(!getToken()) return; try{
+  const p=`photos/${id}.jpg`;
+  const r=await fetch(ghUrl(p),{headers:ghHdr()}); if(!r.ok) return;
+  const sha=(await r.json()).sha;
+  await fetch(ghUrl(p),{method:"DELETE",headers:ghHdr(),
+    body:JSON.stringify({message:"del photo",sha,branch:"main"})}); }catch(e){} }
+// タイマー側の写真ボタン
+document.getElementById("t-photo").onclick=()=>document.getElementById("t-photo-file").click();
+document.getElementById("t-photo-file").onchange=async ev=>{
+  const f=ev.target.files[0]; if(!f||!lastTimerEntryId) return;
+  await attachPhoto(f, lastTimerEntryId);
+  document.getElementById("t-photo-done").style.display="block"; ev.target.value=""; };
+// 手入力側の写真ボタン（保存時にひもづけ）
+let mPhotoFile=null;
+document.getElementById("m-photo").onclick=()=>document.getElementById("m-photo-file").click();
+document.getElementById("m-photo-file").onchange=ev=>{
+  mPhotoFile=ev.target.files[0]||null;
+  document.getElementById("m-photo-done").style.display=mPhotoFile?"block":"none"; };
 
 // ---- 自動同期（GitHub非公開リポをストレージに使用・サーバレス） ----
 const SYNC={owner:"abolabo84-dev", repo:"kiroku-data", path:"data.json"};
@@ -429,6 +511,17 @@ async function syncNow(){
     // 操作ログは端末別ファイルに（失敗しても無視）
     try{ const p=`evlog-${devId}.json`; const {sha}=await ghRead(p);
       await ghWrite(p,evlog,sha); }catch(e){}
+    // 写真キューをアップロード（失敗分は次回に持ち越し）
+    for(const id of [...photoQueue]){ try{
+      const durl=await idbGet(id);
+      if(!durl){ photoQueue=photoQueue.filter(x=>x!==id); savePhotoQ(); continue; }
+      const p=`photos/${id}.jpg`; let psha=null;
+      try{ const r=await fetch(ghUrl(p),{headers:ghHdr()}); if(r.ok) psha=(await r.json()).sha; }catch(e){}
+      const body={message:"photo "+id, content:durl.split(",")[1], branch:"main"};
+      if(psha) body.sha=psha;
+      const w=await fetch(ghUrl(p),{method:"PUT",headers:ghHdr(),body:JSON.stringify(body)});
+      if(w.ok){ photoQueue=photoQueue.filter(x=>x!==id); savePhotoQ(); }
+    }catch(e){} }
     setSyncStatus("✅ 同期できたよ（"+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})+"）");
     if(document.querySelector("#view-cal.active")) renderCal();
     if(document.querySelector("#view-stats.active")) renderStats();
