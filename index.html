@@ -87,7 +87,7 @@
 <body>
 <header>
   <h1>🩹 きろく委員会</h1>
-  <div class="sub">きょうの がんばりを きろくしよう（v0 たたき台）</div>
+  <div class="sub">きょうの がんばりを きろくしよう ／ <a href="help.html" style="color:#2f5c4d">📖 つかいかた</a></div>
 </header>
 <main>
 
@@ -106,6 +106,19 @@
       <button class="btn-start" id="btn-start">スタート</button>
       <button class="btn-pause" id="btn-pause" disabled>ちょっと休憩</button>
       <button class="btn-stop" id="btn-stop" disabled>おわった！</button>
+    </div>
+    <div id="timer-after" style="display:none">
+      <p style="font-size:.9rem; margin:14px 0 0"><b id="t-result"></b> おつかれさま！</p>
+      <label>手ごたえは どうやった？</label>
+      <div class="rating-row" id="t-rating">
+        <button data-v="1">😵<br>むずかしかった</button>
+        <button data-v="2">🤔<br>まあまあ</button>
+        <button data-v="3">🙂<br>できた</button>
+        <button data-v="4">😊<br>ばっちり！</button>
+      </div>
+      <label>メモ（まちがえた問題・気づいたこと）</label>
+      <textarea id="t-memo"></textarea>
+      <button class="btn-main" id="t-done">きろく完了！</button>
     </div>
   </div>
 </section>
@@ -256,6 +269,7 @@ bStart.onclick=()=>{ if(!selectedSubj("timer-subjects")){ alert("教科をえら
 bPause.onclick=()=>{ timerState.acc+=Date.now()-timerState.startTs; timerState.running=false;
   timerState.events.push({t:Date.now(),ev:"pause"}); logEv("timer-pause",{});
   bStart.disabled=false; bStart.textContent="さいかい"; bPause.disabled=true; };
+let lastTimerEntryId=null;
 bStop.onclick=()=>{
   if(timerState.running){ timerState.acc+=Date.now()-timerState.startTs; }
   const mins=Math.max(1,Math.round(timerState.acc/60000));
@@ -264,10 +278,24 @@ bStop.onclick=()=>{
     subject:selectedSubj("timer-subjects"), unit:document.getElementById("timer-unit").value.trim(),
     minutes:mins, source:"timer", timerEvents:timerState.events };
   entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject}); scheduleSync();
-  alert(`おつかれさま！ ${e.subject} ${mins}分 を記録したよ 🩹`);
+  lastTimerEntryId=e.id;
+  document.getElementById("t-result").textContent=`${e.subject} ${mins}分 を記録したよ 🩹`;
+  document.getElementById("timer-after").style.display="block";
   timerState={running:false,startTs:null,acc:0,events:[]}; disp.textContent="00:00:00";
   bStart.disabled=false; bStart.textContent="スタート"; bPause.disabled=true; bStop.disabled=true;
   document.getElementById("timer-unit").value=""; };
+let tRating=null;
+document.querySelectorAll("#t-rating button").forEach(b=>{
+  b.onclick=()=>{ document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel"); tRating=+b.dataset.v; }; });
+document.getElementById("t-done").onclick=()=>{
+  const e=entries.find(x=>x.id===lastTimerEntryId);
+  if(e){ if(tRating) e.rating=tRating;
+    const memo=document.getElementById("t-memo").value.trim(); if(memo) e.memo=memo;
+    store.save(entries); logEv("timer-reflect",{rating:tRating,hasMemo:!!e.memo}); scheduleSync(); }
+  document.getElementById("timer-after").style.display="none";
+  document.getElementById("t-memo").value=""; tRating=null; lastTimerEntryId=null;
+  document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel")); };
 
 // ---- 手入力 ----
 document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
