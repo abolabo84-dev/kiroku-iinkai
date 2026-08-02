@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>きろく委員会（v0 たたき台）</title>
+<style>
+  :root{
+    --mint:#a8d8c8; --mint-deep:#5aa88f; --cream:#fdf9f0; --paper:#ffffff;
+    --ink:#4a4a44; --accent:#e8a87c; --band:#f2d4b8; --soft:#eef6f2;
+    --danger:#d88;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:"Hiragino Maru Gothic ProN","BIZ UDGothic","Yu Gothic UI",sans-serif;
+       background:var(--cream); color:var(--ink); padding-bottom:80px;}
+  header{background:var(--mint); padding:14px 16px 10px; text-align:center;
+         border-bottom:4px dotted var(--mint-deep);}
+  header h1{margin:0; font-size:1.15rem; letter-spacing:.05em; color:#2f5c4d;}
+  header .sub{font-size:.7rem; color:#3f6e5e; margin-top:2px;}
+  main{max-width:640px; margin:0 auto; padding:14px;}
+  .tab-bar{position:fixed; bottom:0; left:0; right:0; display:flex; background:var(--paper);
+           border-top:2px solid var(--mint); z-index:10; max-width:640px; margin:0 auto;}
+  .tab-bar button{flex:1; border:none; background:none; padding:10px 4px 12px; font-size:.72rem;
+                  color:#8a8a80; cursor:pointer;}
+  .tab-bar button .ico{display:block; font-size:1.3rem; margin-bottom:2px;}
+  .tab-bar button.active{color:var(--mint-deep); font-weight:bold;}
+  section.view{display:none;}
+  section.view.active{display:block;}
+  .card{background:var(--paper); border-radius:16px; padding:16px; margin-bottom:14px;
+        box-shadow:0 2px 6px rgba(90,168,143,.15); border:1px solid #e8f0ec;}
+  .bandage{position:relative;}
+  .bandage::before{content:""; position:absolute; top:-7px; left:24px; width:56px; height:14px;
+        background:var(--band); border-radius:7px; transform:rotate(-6deg);
+        box-shadow:inset 0 0 0 2px rgba(0,0,0,.04);}
+  h2{font-size:1rem; margin:4px 0 12px; color:#2f5c4d;}
+  label{display:block; font-size:.8rem; margin:10px 0 4px; color:#5f6f66;}
+  select,input,textarea{width:100%; padding:10px; border:1.5px solid var(--mint);
+        border-radius:10px; font-size:1rem; background:#fff; color:var(--ink);}
+  textarea{resize:vertical; min-height:56px;}
+  .subj-row{display:flex; gap:8px; flex-wrap:wrap;}
+  .subj-row button{flex:1 1 20%; padding:12px 4px; border:2px solid #ddd; border-radius:12px;
+        background:#fff; font-size:.95rem; cursor:pointer; color:var(--ink);}
+  .subj-row button.sel{border-color:var(--mint-deep); background:var(--soft); font-weight:bold;}
+  .timer-display{text-align:center; font-size:3.2rem; font-variant-numeric:tabular-nums;
+        letter-spacing:.04em; margin:14px 0; color:#2f5c4d;}
+  .timer-btns{display:flex; gap:10px;}
+  .timer-btns button{flex:1; padding:14px; border:none; border-radius:14px; font-size:1.05rem;
+        cursor:pointer; color:#fff; font-weight:bold;}
+  .btn-start{background:var(--mint-deep);}
+  .btn-pause{background:var(--accent);}
+  .btn-stop{background:#c98f6b;}
+  .btn-main{width:100%; padding:13px; border:none; border-radius:14px; background:var(--mint-deep);
+        color:#fff; font-size:1.05rem; font-weight:bold; cursor:pointer; margin-top:14px;}
+  .rating-row{display:flex; gap:6px;}
+  .rating-row button{flex:1; padding:10px 2px; border:2px solid #ddd; border-radius:10px;
+        background:#fff; font-size:.75rem; cursor:pointer;}
+  .rating-row button.sel{border-color:var(--accent); background:#fdf3ea; font-weight:bold;}
+  .cal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .cal-head button{border:none; background:var(--soft); border-radius:8px; padding:6px 14px;
+        font-size:1rem; cursor:pointer; color:var(--mint-deep);}
+  table.cal{width:100%; border-collapse:collapse; table-layout:fixed;}
+  table.cal th{font-size:.7rem; padding:4px 0; color:#8aa79b;}
+  table.cal td{height:52px; vertical-align:top; text-align:center; border-radius:8px;
+        font-size:.8rem; cursor:pointer; padding:3px 0;}
+  table.cal td.has{background:var(--soft);}
+  table.cal td.today{outline:2px solid var(--accent);}
+  table.cal td .mins{display:block; font-size:.6rem; color:var(--mint-deep); font-weight:bold;}
+  .day-list .entry{display:flex; justify-content:space-between; align-items:center;
+        padding:9px 4px; border-bottom:1px dashed #dde8e2; font-size:.9rem;}
+  .entry .meta{font-size:.7rem; color:#8a9a90;}
+  .entry .del{border:none; background:none; color:var(--danger); font-size:1rem; cursor:pointer;}
+  .bar-row{display:flex; align-items:center; gap:8px; margin:6px 0; font-size:.85rem;}
+  .bar-row .name{width:3.2em;}
+  .bar-row .bar{height:16px; background:var(--mint); border-radius:8px; min-width:2px;}
+  .bar-row .val{font-size:.75rem; color:#5f6f66;}
+  .isaku-msg{background:var(--soft); border-radius:12px; padding:12px 14px; font-size:.88rem;
+        line-height:1.6; border-left:4px solid var(--mint-deep); margin-bottom:14px;}
+  .isaku-msg .who{font-size:.7rem; color:#5aa88f; display:block; margin-bottom:2px;}
+  .small{font-size:.72rem; color:#98a49e; line-height:1.5;}
+  .io-row{display:flex; gap:8px;}
+  .io-row button{flex:1; padding:10px; border:1.5px solid var(--mint-deep); background:#fff;
+        color:var(--mint-deep); border-radius:10px; cursor:pointer; font-size:.85rem;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🩹 きろく委員会</h1>
+  <div class="sub">きょうの がんばりを きろくしよう（v0 たたき台）</div>
+</header>
+<main>
+
+<!-- ===== ストップウォッチ ===== -->
+<section id="view-timer" class="view active">
+  <div class="isaku-msg"><span class="who">保健委員の先輩より</span>
+    <span id="isaku-line">無理は禁物。でも、今日のきみの努力はちゃんと記録に残るからね。</span></div>
+  <div class="card bandage">
+    <h2>⏱ ストップウォッチ</h2>
+    <label>教科</label>
+    <div class="subj-row" id="timer-subjects"></div>
+    <label>単元・内容（あとからでもOK）</label>
+    <input id="timer-unit" placeholder="例：予習シリーズ 算数 第18回 速さ">
+    <div class="timer-display" id="timer-display">00:00:00</div>
+    <div class="timer-btns">
+      <button class="btn-start" id="btn-start">スタート</button>
+      <button class="btn-pause" id="btn-pause" disabled>ちょっと休憩</button>
+      <button class="btn-stop" id="btn-stop" disabled>おわった！</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 手入力 ===== -->
+<section id="view-manual" class="view">
+  <div class="card bandage">
+    <h2>✍️ あとから記録（はかりわすれた分）</h2>
+    <label>日付</label><input type="date" id="m-date">
+    <label>教科</label>
+    <div class="subj-row" id="manual-subjects"></div>
+    <label>単元・内容</label><input id="m-unit" placeholder="例：漢字練習、理科 メモリーチェック">
+    <label>勉強した時間（分）</label><input type="number" id="m-mins" min="1" placeholder="30">
+    <label>手ごたえ</label>
+    <div class="rating-row" id="m-rating">
+      <button data-v="1">😵<br>むずかしかった</button>
+      <button data-v="2">🤔<br>まあまあ</button>
+      <button data-v="3">🙂<br>できた</button>
+      <button data-v="4">😊<br>ばっちり！</button>
+    </div>
+    <label>メモ（まちがえた問題・気づいたこと）</label>
+    <textarea id="m-memo"></textarea>
+    <button class="btn-main" id="m-save">記録する</button>
+  </div>
+  <div class="card">
+    <h2>📷 ノートの写真（v1で実装予定）</h2>
+    <p class="small">紙のノートで勉強したら、パシャッと撮って自動で読み取り→記録＆分析する機能をここに入れる予定。今はメモ欄に書いておいてね。</p>
+  </div>
+</section>
+
+<!-- ===== カレンダー ===== -->
+<section id="view-cal" class="view">
+  <div class="card">
+    <div class="cal-head">
+      <button id="cal-prev">←</button>
+      <h2 id="cal-title" style="margin:0"></h2>
+      <button id="cal-next">→</button>
+    </div>
+    <table class="cal"><thead><tr>
+      <th>日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th>土</th>
+    </tr></thead><tbody id="cal-body"></tbody></table>
+  </div>
+  <div class="card day-list">
+    <h2 id="day-title">きょうの記録</h2>
+    <div id="day-entries"></div>
+  </div>
+</section>
+
+<!-- ===== ぶんせき ===== -->
+<section id="view-stats" class="view">
+  <div class="isaku-msg"><span class="who">保健委員の先輩より</span>
+    <span id="stats-msg"></span></div>
+  <div class="card">
+    <h2>📊 この7日間の教科バランス</h2>
+    <div id="stats-bars"></div>
+    <p class="small">合計：<span id="stats-total"></span></p>
+  </div>
+  <div class="card">
+    <h2>🗓 記録のあゆみ</h2>
+    <p style="font-size:.9rem" id="stats-summary"></p>
+    <p class="small">記録がたまるほど、「自分でも気づいていない伸びしろ」の分析ができるようになるよ（AI分析はv1で搭載予定）。</p>
+  </div>
+  <div class="card">
+    <h2>💾 データの持ち出し（iPad⇄パソコン）</h2>
+    <div class="io-row">
+      <button id="btn-export">書き出す</button>
+      <button id="btn-import">読み込む</button>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none">
+    <p class="small">v0では手動で書き出し／読み込み。v1で自動同期にする予定。</p>
+  </div>
+</section>
+
+</main>
+
+<nav class="tab-bar">
+  <button data-view="timer" class="active"><span class="ico">⏱</span>はかる</button>
+  <button data-view="manual"><span class="ico">✍️</span>あとから</button>
+  <button data-view="cal"><span class="ico">🗓</span>カレンダー</button>
+  <button data-view="stats"><span class="ico">📊</span>ぶんせき</button>
+</nav>
+
+<script>
+const SUBJECTS = ["算数","国語","理科","社会","その他"];
+const store = {
+  load(){ try{return JSON.parse(localStorage.getItem("kiroku-iinkai")||"[]");}catch(e){return[];} },
+  save(list){ localStorage.setItem("kiroku-iinkai", JSON.stringify(list)); }
+};
+let entries = store.load();
+
+// ---- 方針: 全操作イベントもログする（テストプレイ＝データ） ----
+let evlog = [];
+try{ evlog = JSON.parse(localStorage.getItem("kiroku-evlog")||"[]"); }catch(e){}
+function logEv(type, data){ evlog.push({t:Date.now(), type, ...data});
+  if(evlog.length>5000) evlog = evlog.slice(-4000);
+  localStorage.setItem("kiroku-evlog", JSON.stringify(evlog)); }
+
+// ---- タブ ----
+document.querySelectorAll(".tab-bar button").forEach(b=>{
+  b.onclick = ()=>{ document.querySelectorAll(".tab-bar button").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll("section.view").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    document.getElementById("view-"+b.dataset.view).classList.add("active");
+    logEv("tab",{view:b.dataset.view});
+    if(b.dataset.view==="cal") renderCal();
+    if(b.dataset.view==="stats") renderStats(); };
+});
+
+// ---- 教科ボタン ----
+function makeSubjButtons(containerId){
+  const c = document.getElementById(containerId);
+  SUBJECTS.forEach(s=>{ const b=document.createElement("button"); b.textContent=s;
+    b.onclick=()=>{ c.querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
+      b.classList.add("sel"); }; c.appendChild(b); });
+}
+makeSubjButtons("timer-subjects"); makeSubjButtons("manual-subjects");
+function selectedSubj(containerId){
+  const b=document.querySelector("#"+containerId+" button.sel"); return b?b.textContent:null; }
+
+// ---- ストップウォッチ ----
+let timerState={running:false, startTs:null, acc:0, events:[]};
+const disp=document.getElementById("timer-display");
+function fmt(ms){ const s=Math.floor(ms/1000);
+  return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,"0")).join(":"); }
+setInterval(()=>{ if(timerState.running) disp.textContent=fmt(timerState.acc+(Date.now()-timerState.startTs)); },250);
+const bStart=document.getElementById("btn-start"), bPause=document.getElementById("btn-pause"),
+      bStop=document.getElementById("btn-stop");
+bStart.onclick=()=>{ if(!selectedSubj("timer-subjects")){ alert("教科をえらんでね"); return; }
+  timerState.running=true; timerState.startTs=Date.now();
+  timerState.events.push({t:Date.now(),ev:"start"}); logEv("timer-start",{});
+  bStart.disabled=true; bPause.disabled=false; bStop.disabled=false; };
+bPause.onclick=()=>{ timerState.acc+=Date.now()-timerState.startTs; timerState.running=false;
+  timerState.events.push({t:Date.now(),ev:"pause"}); logEv("timer-pause",{});
+  bStart.disabled=false; bStart.textContent="さいかい"; bPause.disabled=true; };
+bStop.onclick=()=>{
+  if(timerState.running){ timerState.acc+=Date.now()-timerState.startTs; }
+  const mins=Math.max(1,Math.round(timerState.acc/60000));
+  timerState.events.push({t:Date.now(),ev:"stop"});
+  const e={ id:Date.now(), date:new Date().toISOString().slice(0,10),
+    subject:selectedSubj("timer-subjects"), unit:document.getElementById("timer-unit").value.trim(),
+    minutes:mins, source:"timer", timerEvents:timerState.events };
+  entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject});
+  alert(`おつかれさま！ ${e.subject} ${mins}分 を記録したよ 🩹`);
+  timerState={running:false,startTs:null,acc:0,events:[]}; disp.textContent="00:00:00";
+  bStart.disabled=false; bStart.textContent="スタート"; bPause.disabled=true; bStop.disabled=true;
+  document.getElementById("timer-unit").value=""; };
+
+// ---- 手入力 ----
+document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
+let mRating=null;
+document.querySelectorAll("#m-rating button").forEach(b=>{
+  b.onclick=()=>{ document.querySelectorAll("#m-rating button").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel"); mRating=+b.dataset.v; }; });
+document.getElementById("m-save").onclick=()=>{
+  const subj=selectedSubj("manual-subjects"), mins=+document.getElementById("m-mins").value;
+  if(!subj||!mins){ alert("教科と時間を入れてね"); return; }
+  const e={ id:Date.now(), date:document.getElementById("m-date").value, subject:subj,
+    unit:document.getElementById("m-unit").value.trim(), minutes:mins, source:"manual",
+    rating:mRating, memo:document.getElementById("m-memo").value.trim() };
+  entries.push(e); store.save(entries); logEv("entry-manual",{mins,subject:subj});
+  alert("記録したよ！えらい！ 🩹");
+  document.getElementById("m-unit").value=""; document.getElementById("m-mins").value="";
+  document.getElementById("m-memo").value=""; mRating=null;
+  document.querySelectorAll("#m-rating button").forEach(x=>x.classList.remove("sel")); };
+
+// ---- カレンダー ----
+let calY=new Date().getFullYear(), calM=new Date().getMonth();
+let selDate=new Date().toISOString().slice(0,10);
+function dayTotal(d){ return entries.filter(e=>e.date===d).reduce((a,e)=>a+e.minutes,0); }
+function renderCal(){
+  document.getElementById("cal-title").textContent=`${calY}年${calM+1}月`;
+  const first=new Date(calY,calM,1).getDay(), days=new Date(calY,calM+1,0).getDate();
+  const today=new Date().toISOString().slice(0,10);
+  let html="<tr>", cell=0;
+  for(let i=0;i<first;i++){ html+="<td></td>"; cell++; }
+  for(let d=1;d<=days;d++){
+    const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const tot=dayTotal(ds);
+    html+=`<td class="${tot?'has':''} ${ds===today?'today':''}" data-d="${ds}">${d}${tot?`<span class="mins">${tot}分</span>`:""}</td>`;
+    if(++cell%7===0) html+="</tr><tr>"; }
+  document.getElementById("cal-body").innerHTML=html+"</tr>";
+  document.querySelectorAll("#cal-body td[data-d]").forEach(td=>{
+    td.onclick=()=>{ selDate=td.dataset.d; renderDay(); }; });
+  renderDay(); }
+document.getElementById("cal-prev").onclick=()=>{ if(--calM<0){calM=11;calY--;} renderCal(); };
+document.getElementById("cal-next").onclick=()=>{ if(++calM>11){calM=0;calY++;} renderCal(); };
+function renderDay(){
+  document.getElementById("day-title").textContent=`${selDate} の記録`;
+  const list=entries.filter(e=>e.date===selDate);
+  document.getElementById("day-entries").innerHTML = list.length? list.map(e=>
+    `<div class="entry"><div><b>${e.subject}</b> ${e.unit||""}
+      <div class="meta">${e.minutes}分・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${e.memo?`<br>📝${e.memo}`:""}</div></div>
+      <button class="del" data-id="${e.id}">🗑</button></div>`).join("")
+    : '<p class="small">この日の記録はまだないよ</p>';
+  document.querySelectorAll("#day-entries .del").forEach(b=>{
+    b.onclick=()=>{ if(confirm("この記録を消す？")){
+      entries=entries.filter(e=>e.id!=+b.dataset.id); store.save(entries); renderCal(); } }; }); }
+
+// ---- ぶんせき ----
+function renderStats(){
+  const now=new Date(); const week=[];
+  for(let i=0;i<7;i++){ const d=new Date(now); d.setDate(d.getDate()-i);
+    week.push(d.toISOString().slice(0,10)); }
+  const wk=entries.filter(e=>week.includes(e.date));
+  const bySubj={}; wk.forEach(e=>{ bySubj[e.subject]=(bySubj[e.subject]||0)+e.minutes; });
+  const max=Math.max(1,...Object.values(bySubj));
+  document.getElementById("stats-bars").innerHTML = SUBJECTS.filter(s=>bySubj[s]).map(s=>
+    `<div class="bar-row"><span class="name">${s}</span>
+      <div class="bar" style="width:${bySubj[s]/max*70}%"></div>
+      <span class="val">${bySubj[s]}分</span></div>`).join("") || '<p class="small">この7日間の記録はまだないよ</p>';
+  const tot=wk.reduce((a,e)=>a+e.minutes,0);
+  document.getElementById("stats-total").textContent=`${tot}分（${(tot/60).toFixed(1)}時間）`;
+  const allDays=new Set(entries.map(e=>e.date)).size;
+  document.getElementById("stats-summary").textContent=
+    `記録した日数：${allDays}日 ／ 記録の数：${entries.length}件`;
+  document.getElementById("stats-msg").textContent = tot>0
+    ? "今週もよくがんばってるね。休憩と睡眠も、立派な勉強のうちだからね。"
+    : "記録はいつからでも始められるよ。あせらなくて大丈夫。"; }
+
+// ---- 書き出し／読み込み ----
+document.getElementById("btn-export").onclick=()=>{
+  const blob=new Blob([JSON.stringify({entries,evlog},null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=`kiroku-iinkai-${new Date().toISOString().slice(0,10)}.json`; a.click(); };
+document.getElementById("btn-import").onclick=()=>document.getElementById("import-file").click();
+document.getElementById("import-file").onchange=ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ try{
+    const data=JSON.parse(r.result); const inc=data.entries||[];
+    const ids=new Set(entries.map(e=>e.id));
+    inc.forEach(e=>{ if(!ids.has(e.id)) entries.push(e); });
+    store.save(entries); alert(`読み込んだよ（合計 ${entries.length}件）`); renderCal();
+  }catch(e){ alert("読み込めなかった…ファイルを確認してね"); } }; r.readAsText(f); };
+
+// ---- 先輩のことば（オリジナル文・やさしい保健委員風） ----
+const LINES=[
+  "無理は禁物。でも、今日のきみの努力はちゃんと記録に残るからね。",
+  "失敗は手当てすれば治るけがと同じ。ちゃんと見て、手当てすれば強くなるよ。",
+  "つらいときは休むのも作戦のうち。ぼくはいつでもここにいるから。",
+  "コツコツ積み重ねてきた記録は、きみだけの宝物だよ。",
+  "今日できなかったことは、明日できるようになる途中ってことだね。"
+];
+document.getElementById("isaku-line").textContent=LINES[new Date().getDate()%LINES.length];
+
+renderCal();
+</script>
+</body>
+</html>
