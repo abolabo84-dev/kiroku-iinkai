@@ -169,13 +169,26 @@
     <p class="small">記録がたまるほど、「自分でも気づいていない伸びしろ」の分析ができるようになるよ（AI分析はv1で搭載予定）。</p>
   </div>
   <div class="card">
-    <h2>💾 データの持ち出し（iPad⇄パソコン）</h2>
+    <h2>☁️ 自動同期（iPad⇄パソコン）</h2>
+    <div id="sync-setup">
+      <label>家族のあいことば（最初に1回だけ入力）</label>
+      <input type="password" id="sync-token" placeholder="おうちの人に入れてもらってね">
+      <button class="btn-main" id="sync-save">同期をオンにする</button>
+    </div>
+    <div id="sync-on" style="display:none">
+      <p class="small" id="sync-status">同期の準備OK</p>
+      <div class="io-row"><button id="btn-sync">今すぐ同期</button>
+        <button id="sync-off">同期をやめる</button></div>
+    </div>
+    <p class="small">記録はこの家族専用の非公開の場所に保存されるよ。</p>
+  </div>
+  <div class="card">
+    <h2>💾 データの持ち出し（手動バックアップ）</h2>
     <div class="io-row">
       <button id="btn-export">書き出す</button>
       <button id="btn-import">読み込む</button>
     </div>
     <input type="file" id="import-file" accept=".json" style="display:none">
-    <p class="small">v0では手動で書き出し／読み込み。v1で自動同期にする予定。</p>
   </div>
 </section>
 
@@ -195,6 +208,9 @@ const store = {
   save(list){ localStorage.setItem("kiroku-iinkai", JSON.stringify(list)); }
 };
 let entries = store.load();
+let deletedIds = [];
+try{ deletedIds = JSON.parse(localStorage.getItem("kiroku-deleted")||"[]"); }catch(e){}
+function saveDeleted(){ localStorage.setItem("kiroku-deleted", JSON.stringify(deletedIds)); }
 
 // ---- 方針: 全操作イベントもログする（テストプレイ＝データ） ----
 let evlog = [];
@@ -247,7 +263,7 @@ bStop.onclick=()=>{
   const e={ id:Date.now(), date:new Date().toISOString().slice(0,10),
     subject:selectedSubj("timer-subjects"), unit:document.getElementById("timer-unit").value.trim(),
     minutes:mins, source:"timer", timerEvents:timerState.events };
-  entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject});
+  entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject}); scheduleSync();
   alert(`おつかれさま！ ${e.subject} ${mins}分 を記録したよ 🩹`);
   timerState={running:false,startTs:null,acc:0,events:[]}; disp.textContent="00:00:00";
   bStart.disabled=false; bStart.textContent="スタート"; bPause.disabled=true; bStop.disabled=true;
@@ -265,7 +281,7 @@ document.getElementById("m-save").onclick=()=>{
   const e={ id:Date.now(), date:document.getElementById("m-date").value, subject:subj,
     unit:document.getElementById("m-unit").value.trim(), minutes:mins, source:"manual",
     rating:mRating, memo:document.getElementById("m-memo").value.trim() };
-  entries.push(e); store.save(entries); logEv("entry-manual",{mins,subject:subj});
+  entries.push(e); store.save(entries); logEv("entry-manual",{mins,subject:subj}); scheduleSync();
   alert("記録したよ！えらい！ 🩹");
   document.getElementById("m-unit").value=""; document.getElementById("m-mins").value="";
   document.getElementById("m-memo").value=""; mRating=null;
@@ -302,7 +318,8 @@ function renderDay(){
     : '<p class="small">この日の記録はまだないよ</p>';
   document.querySelectorAll("#day-entries .del").forEach(b=>{
     b.onclick=()=>{ if(confirm("この記録を消す？")){
-      entries=entries.filter(e=>e.id!=+b.dataset.id); store.save(entries); renderCal(); } }; }); }
+      const id=+b.dataset.id; entries=entries.filter(e=>e.id!==id);
+      deletedIds.push(id); saveDeleted(); store.save(entries); renderCal(); scheduleSync(); } }; }); }
 
 // ---- ぶんせき ----
 function renderStats(){
@@ -339,6 +356,77 @@ document.getElementById("import-file").onchange=ev=>{
     inc.forEach(e=>{ if(!ids.has(e.id)) entries.push(e); });
     store.save(entries); alert(`読み込んだよ（合計 ${entries.length}件）`); renderCal();
   }catch(e){ alert("読み込めなかった…ファイルを確認してね"); } }; r.readAsText(f); };
+
+// ---- 自動同期（GitHub非公開リポをストレージに使用・サーバレス） ----
+const SYNC={owner:"abolabo84-dev", repo:"kiroku-data", path:"data.json"};
+const getToken=()=>localStorage.getItem("kiroku-token")||"";
+let devId=localStorage.getItem("kiroku-dev");
+if(!devId){ devId=Math.random().toString(36).slice(2,8); localStorage.setItem("kiroku-dev",devId); }
+function b64enc(str){ const u=new TextEncoder().encode(str); let s="";
+  for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]); return btoa(s); }
+function b64dec(b){ const s=atob(b.replace(/\s/g,"")); const u=new Uint8Array(s.length);
+  for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return new TextDecoder().decode(u); }
+const ghHdr=()=>({ "Authorization":"Bearer "+getToken(),
+  "Accept":"application/vnd.github+json", "Content-Type":"application/json" });
+function ghUrl(path){ return `https://api.github.com/repos/${SYNC.owner}/${SYNC.repo}/contents/${path}`; }
+async function ghRead(path){
+  const r=await fetch(ghUrl(path)+"?t="+Date.now(),{headers:ghHdr(),cache:"no-store"});
+  if(r.status===404) return {data:null, sha:null};
+  if(!r.ok) throw new Error("read "+r.status);
+  const j=await r.json(); return {data:JSON.parse(b64dec(j.content)), sha:j.sha}; }
+async function ghWrite(path, obj, sha){
+  const body={message:"sync "+devId, content:b64enc(JSON.stringify(obj)), branch:"main"};
+  if(sha) body.sha=sha;
+  const r=await fetch(ghUrl(path),{method:"PUT",headers:ghHdr(),body:JSON.stringify(body)});
+  if(!r.ok) throw new Error("write "+r.status); }
+function mergeRemote(remote){
+  const del=new Set([...(remote&&remote.deleted||[]), ...deletedIds]);
+  const map=new Map();
+  [...(remote&&remote.entries||[]), ...entries].forEach(e=>{ if(!del.has(e.id)) map.set(e.id,e); });
+  entries=[...map.values()].sort((a,b)=>a.id-b.id);
+  deletedIds=[...del]; store.save(entries); saveDeleted(); }
+let syncBusy=false, syncQueued=false;
+function setSyncStatus(msg){ const el=document.getElementById("sync-status"); if(el) el.textContent=msg; }
+async function syncNow(){
+  if(!getToken()) return;
+  if(syncBusy){ syncQueued=true; return; }
+  syncBusy=true; setSyncStatus("☁️ 同期中…");
+  try{
+    for(let tries=0;;tries++){
+      const {data,sha}=await ghRead(SYNC.path);
+      mergeRemote(data);
+      try{ await ghWrite(SYNC.path,{entries,deleted:deletedIds},sha); break; }
+      catch(e){ if(tries>=2) throw e; } // sha競合→読み直して再試行
+    }
+    // 操作ログは端末別ファイルに（失敗しても無視）
+    try{ const p=`evlog-${devId}.json`; const {sha}=await ghRead(p);
+      await ghWrite(p,evlog,sha); }catch(e){}
+    setSyncStatus("✅ 同期できたよ（"+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})+"）");
+    if(document.querySelector("#view-cal.active")) renderCal();
+    if(document.querySelector("#view-stats.active")) renderStats();
+  }catch(e){ setSyncStatus("⚠️ 同期できへんかった…電波かあいことばを確認してね"); }
+  syncBusy=false;
+  if(syncQueued){ syncQueued=false; syncNow(); } }
+let syncTimer=null;
+function scheduleSync(){ if(!getToken()) return;
+  clearTimeout(syncTimer); syncTimer=setTimeout(syncNow, 3000); }
+function renderSyncUI(){
+  const on=!!getToken();
+  document.getElementById("sync-setup").style.display=on?"none":"block";
+  document.getElementById("sync-on").style.display=on?"block":"none"; }
+document.getElementById("sync-save").onclick=()=>{
+  const t=document.getElementById("sync-token").value.trim();
+  if(!t){ alert("あいことばを入れてね"); return; }
+  localStorage.setItem("kiroku-token",t);
+  document.getElementById("sync-token").value="";
+  renderSyncUI(); syncNow(); };
+document.getElementById("btn-sync").onclick=syncNow;
+document.getElementById("sync-off").onclick=()=>{
+  if(confirm("この端末の同期をやめる？（記録は消えないよ）")){
+    localStorage.removeItem("kiroku-token"); renderSyncUI(); } };
+renderSyncUI();
+if(getToken()) syncNow();
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&getToken()) syncNow(); });
 
 // ---- 先輩のことば（オリジナル文・やさしい保健委員風） ----
 const LINES=[
