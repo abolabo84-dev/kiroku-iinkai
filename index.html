@@ -369,6 +369,7 @@ function renderDay(){
         photoQueue=photoQueue.filter(x=>x!==id); savePhotoQ(); } } }; }); }
 
 // ---- ぶんせき ----
+const SUBJ_COLORS={"算数":"#4a7fd0","国語":"#d05a6e","理科":"#2e8b6a","社会":"#d98a3d","その他":"#9a7ac8"};
 function renderStats(){
   const now=new Date(); const week=[];
   for(let i=0;i<7;i++){ const d=new Date(now); d.setDate(d.getDate()-i);
@@ -378,7 +379,7 @@ function renderStats(){
   const max=Math.max(1,...Object.values(bySubj));
   document.getElementById("stats-bars").innerHTML = SUBJECTS.filter(s=>bySubj[s]).map(s=>
     `<div class="bar-row"><span class="name">${s}</span>
-      <div class="bar" style="width:${bySubj[s]/max*70}%"></div>
+      <div class="bar" style="width:${bySubj[s]/max*70}%; background:${SUBJ_COLORS[s]||"var(--mint)"}"></div>
       <span class="val">${bySubj[s]}分</span></div>`).join("") || '<p class="small">この7日間の記録はまだないよ</p>';
   const tot=wk.reduce((a,e)=>a+e.minutes,0);
   document.getElementById("stats-total").textContent=`${tot}分（${(tot/60).toFixed(1)}時間）`;
