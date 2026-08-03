@@ -369,7 +369,10 @@ function renderDay(){
         photoQueue=photoQueue.filter(x=>x!==id); savePhotoQ(); } } }; }); }
 
 // ---- ぶんせき ----
-const SUBJ_COLORS={"算数":"#4a7fd0","国語":"#d05a6e","理科":"#2e8b6a","社会":"#d98a3d","その他":"#9a7ac8"};
+const SUBJ_COLORS={
+  "算数":{bg:"#aecdf0",line:"#4a7fd0"},"国語":{bg:"#f3bcc6",line:"#d05a6e"},
+  "理科":{bg:"#a8d8c0",line:"#2e8b6a"},"社会":{bg:"#f5d0a3",line:"#d98a3d"},
+  "その他":{bg:"#d3c5ea",line:"#9a7ac8"}};
 function renderStats(){
   const now=new Date(); const week=[];
   for(let i=0;i<7;i++){ const d=new Date(now); d.setDate(d.getDate()-i);
@@ -379,7 +382,7 @@ function renderStats(){
   const max=Math.max(1,...Object.values(bySubj));
   document.getElementById("stats-bars").innerHTML = SUBJECTS.filter(s=>bySubj[s]).map(s=>
     `<div class="bar-row"><span class="name">${s}</span>
-      <div class="bar" style="width:${bySubj[s]/max*70}%; background:${SUBJ_COLORS[s]||"var(--mint)"}"></div>
+      <div class="bar" style="width:${bySubj[s]/max*70}%; background:${(SUBJ_COLORS[s]||{}).bg||"var(--mint)"}; border:1.5px solid ${(SUBJ_COLORS[s]||{}).line||"var(--mint-deep)"}"></div>
       <span class="val">${bySubj[s]}分</span></div>`).join("") || '<p class="small">この7日間の記録はまだないよ</p>';
   const tot=wk.reduce((a,e)=>a+e.minutes,0);
   document.getElementById("stats-total").textContent=`${tot}分（${(tot/60).toFixed(1)}時間）`;
