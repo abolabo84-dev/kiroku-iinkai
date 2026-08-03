@@ -496,7 +496,10 @@ document.getElementById("m-photo-file").onchange=ev=>{
   mPhotoFile=ev.target.files[0]||null;
   document.getElementById("m-photo-done").style.display=mPhotoFile?"block":"none"; };
 
-// ---- 自動同期（GitHub非公開リポをストレージに使用・サーバレス） ----
+// ---- 自動同期（保存先は今までどおり非公開リポ。経路だけ中継サーバ経由に変更） ----
+// 端末に置くのは「あいことば」だけ。GitHubのトークンは中継サーバ側にしか無い。
+// レスポンスの形は今までと同じなので、sha の扱いも 404 の扱いも下のコードは変わらん。
+const API="https://kiroku-iinkai.netlify.app/api/kiroku";
 const SYNC={owner:"abolabo84-dev", repo:"kiroku-data", path:"data.json"};
 const getToken=()=>localStorage.getItem("kiroku-token")||"";
 let devId=localStorage.getItem("kiroku-dev");
@@ -505,11 +508,12 @@ function b64enc(str){ const u=new TextEncoder().encode(str); let s="";
   for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]); return btoa(s); }
 function b64dec(b){ const s=atob(b.replace(/\s/g,"")); const u=new Uint8Array(s.length);
   for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return new TextDecoder().decode(u); }
-const ghHdr=()=>({ "Authorization":"Bearer "+getToken(),
+const ghHdr=()=>({ "X-Kiroku-Pass":getToken(),
   "Accept":"application/vnd.github+json", "Content-Type":"application/json" });
-function ghUrl(path){ return `https://api.github.com/repos/${SYNC.owner}/${SYNC.repo}/contents/${path}`; }
+function ghUrl(path){ return `${API}?path=${encodeURIComponent(path)}`; }
 async function ghRead(path){
-  const r=await fetch(ghUrl(path)+"?t="+Date.now(),{headers:ghHdr(),cache:"no-store"});
+  // ghUrl が既に ? を持つので、キャッシュ避けは & で足す
+  const r=await fetch(ghUrl(path)+"&t="+Date.now(),{headers:ghHdr(),cache:"no-store"});
   if(r.status===404) return {data:null, sha:null};
   if(!r.ok) throw new Error("read "+r.status);
   const j=await r.json(); return {data:JSON.parse(b64dec(j.content)), sha:j.sha}; }

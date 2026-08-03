@@ -1,2 +1,13 @@
 # 家族向けの私的テキストは公開リポに含めない
 *.txt
+
+# なごみの勉強記録の書き出し（「💾 データの持ち出し」が吐くファイル）。
+# このリポジトリは公開やから、絶対に載せたらあかん。
+kiroku-iinkai-*.json
+
+# Local Netlify folder
+.netlify
+
+# 実行スクリプト（配布不要・ローカル用）
+setup-token.ps1
+setup-token.bat

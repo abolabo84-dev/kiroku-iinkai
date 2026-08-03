@@ -1,0 +1,11 @@
+# 中継サーバ（Function）専用サイト。アプリ本体は今までどおり GitHub Pages に置く。
+# なごみのホーム画面のURLを変えんで済むように、あえて分けとる。
+#
+# ビルドコマンドは置かん。Windowsのcmdでは `mkdir -p` が通らんし、
+# 静的ファイルは public/index.html を1枚置いとくだけで足りる。
+
+[build]
+  publish = "public"
+
+[functions]
+  node_bundler = "esbuild"
