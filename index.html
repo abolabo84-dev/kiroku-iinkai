@@ -270,7 +270,8 @@ function fmt(ms){ const s=Math.floor(ms/1000);
 setInterval(()=>{ if(timerState.running) disp.textContent=fmt(timerState.acc+(Date.now()-timerState.startTs)); },250);
 const bStart=document.getElementById("btn-start"), bPause=document.getElementById("btn-pause"),
       bStop=document.getElementById("btn-stop");
-bStart.onclick=()=>{ if(!selectedSubj("timer-subjects")){ alert("教科をえらんでね"); return; }
+bStart.onclick=()=>{ if(!selectedSubj("timer-subjects")){ logEv("timer-start-fail",{});
+    alert("教科をえらんでね"); return; }
   timerState.running=true; timerState.startTs=Date.now();
   timerState.events.push({t:Date.now(),ev:"start"}); logEv("timer-start",{});
   bStart.disabled=true; bPause.disabled=false; bStop.disabled=false; };
@@ -314,7 +315,9 @@ document.querySelectorAll("#m-rating button").forEach(b=>{
     b.classList.add("sel"); mRating=+b.dataset.v; }; });
 document.getElementById("m-save").onclick=()=>{
   const subj=selectedSubj("manual-subjects"), mins=+document.getElementById("m-mins").value;
-  if(!subj||!mins){ alert("教科と時間を入れてね"); return; }
+  if(!subj||!mins){ logEv("entry-manual-fail",{hasSubj:!!subj,hasMins:!!mins,
+      hasUnit:!!document.getElementById("m-unit").value.trim()});
+    alert("教科と時間を入れてね"); return; }
   const e={ id:Date.now(), date:document.getElementById("m-date").value, subject:subj,
     unit:document.getElementById("m-unit").value.trim(), minutes:mins, source:"manual",
     rating:mRating, memo:document.getElementById("m-memo").value.trim() };
