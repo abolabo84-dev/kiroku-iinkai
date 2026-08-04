@@ -288,7 +288,7 @@ bStop.onclick=()=>{
     minutes:mins, source:"timer", timerEvents:timerState.events };
   entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject}); scheduleSync();
   lastTimerEntryId=e.id;
-  document.getElementById("t-result").textContent=`${e.subject} ${mins}分 を記録したよ 🩹`;
+  document.getElementById("t-result").textContent=`${e.subject} ${fmtMins(mins)} を記録したよ 🩹`;
   document.getElementById("t-photo-done").style.display="none";
   document.getElementById("timer-after").style.display="block";
   timerState={running:false,startTs:null,acc:0,events:[]}; disp.textContent="00:00:00";
@@ -329,6 +329,9 @@ document.getElementById("m-save").onclick=()=>{
   document.getElementById("m-memo").value=""; mRating=null;
   document.querySelectorAll("#m-rating button").forEach(x=>x.classList.remove("sel")); };
 
+// 分→「何時間何分」表記（なごみ要望第3号）
+function fmtMins(m){ return m<60 ? `${m}分` : `${Math.floor(m/60)}時間${m%60?`${m%60}分`:""}`; }
+
 // ---- カレンダー ----
 let calY=new Date().getFullYear(), calM=new Date().getMonth();
 let selDate=new Date().toISOString().slice(0,10);
@@ -342,7 +345,7 @@ function renderCal(){
   for(let d=1;d<=days;d++){
     const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const tot=dayTotal(ds);
-    html+=`<td class="${tot?'has':''} ${ds===today?'today':''}" data-d="${ds}">${d}${tot?`<span class="mins">${tot}分</span>`:""}</td>`;
+    html+=`<td class="${tot?'has':''} ${ds===today?'today':''}" data-d="${ds}">${d}${tot?`<span class="mins">${fmtMins(tot)}</span>`:""}</td>`;
     if(++cell%7===0) html+="</tr><tr>"; }
   document.getElementById("cal-body").innerHTML=html+"</tr>";
   document.querySelectorAll("#cal-body td[data-d]").forEach(td=>{
@@ -355,7 +358,7 @@ function renderDay(){
   const list=entries.filter(e=>e.date===selDate);
   document.getElementById("day-entries").innerHTML = list.length? list.map(e=>
     `<div class="entry"><div><b>${e.subject}</b> ${e.unit||""}
-      <div class="meta">${e.minutes}分・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${e.photo?` <button class="pv" data-id="${e.id}" style="border:1px solid var(--mint-deep);background:#fff;border-radius:8px;padding:1px 8px;cursor:pointer">📷 しゃしん</button>`:""}${e.memo?`<br>📝${e.memo}`:""}</div></div>
+      <div class="meta">${fmtMins(e.minutes)}・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${e.photo?` <button class="pv" data-id="${e.id}" style="border:1px solid var(--mint-deep);background:#fff;border-radius:8px;padding:1px 8px;cursor:pointer">📷 しゃしん</button>`:""}${e.memo?`<br>📝${e.memo}`:""}</div></div>
       <button class="del" data-id="${e.id}">🗑</button></div>`).join("")
     : '<p class="small">この日の記録はまだないよ</p>';
   document.querySelectorAll("#day-entries .pv").forEach(b=>{
@@ -383,9 +386,9 @@ function renderStats(){
   document.getElementById("stats-bars").innerHTML = SUBJECTS.filter(s=>bySubj[s]).map(s=>
     `<div class="bar-row"><span class="name">${s}</span>
       <div class="bar" style="width:${bySubj[s]/max*70}%; background:${(SUBJ_COLORS[s]||{}).bg||"var(--mint)"}; border:1.5px solid ${(SUBJ_COLORS[s]||{}).line||"var(--mint-deep)"}"></div>
-      <span class="val">${bySubj[s]}分</span></div>`).join("") || '<p class="small">この7日間の記録はまだないよ</p>';
+      <span class="val">${fmtMins(bySubj[s])}</span></div>`).join("") || '<p class="small">この7日間の記録はまだないよ</p>';
   const tot=wk.reduce((a,e)=>a+e.minutes,0);
-  document.getElementById("stats-total").textContent=`${tot}分（${(tot/60).toFixed(1)}時間）`;
+  document.getElementById("stats-total").textContent=fmtMins(tot);
   const allDays=new Set(entries.map(e=>e.date)).size;
   document.getElementById("stats-summary").textContent=
     `記録した日数：${allDays}日 ／ 記録の数：${entries.length}件`;
