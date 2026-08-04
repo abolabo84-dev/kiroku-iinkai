@@ -39,6 +39,8 @@
   select,input,textarea{box-sizing:border-box; width:100%; padding:10px; border:1.5px solid var(--mint);
         border-radius:10px; font-size:1rem; background:#fff; color:var(--ink);}
   textarea{resize:vertical; min-height:56px;}
+  /* iOS Safariは日付入力の中身だけ中央寄せにするので、他の欄と同じ左寄せに合わせる */
+  input[type=date]::-webkit-date-and-time-value{text-align:left;}
   .subj-row{display:flex; gap:8px; flex-wrap:wrap;}
   .subj-row button{flex:1 1 20%; padding:12px 4px; border:2px solid #ddd; border-radius:12px;
         background:#fff; font-size:.95rem; cursor:pointer; color:var(--ink);}
