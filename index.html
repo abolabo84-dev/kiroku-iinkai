@@ -266,6 +266,15 @@ function selectedSubj(containerId){
 
 // ---- ストップウォッチ ----
 let timerState={running:false, startTs:null, acc:0, events:[]};
+// iOSにページを殺されてもタイマーが生き残るように、状態を都度localStorageへ（なごみバグ報告第2号）
+const TKEY="kiroku-timer";
+function saveTimer(){
+  if(timerState.running||timerState.acc>0)
+    localStorage.setItem(TKEY, JSON.stringify({...timerState,
+      subj:selectedSubj("timer-subjects"), unit:document.getElementById("timer-unit").value}));
+  else localStorage.removeItem(TKEY);
+}
+window.addEventListener("pagehide", saveTimer);
 const disp=document.getElementById("timer-display");
 function fmt(ms){ const s=Math.floor(ms/1000);
   return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,"0")).join(":"); }
@@ -275,10 +284,10 @@ const bStart=document.getElementById("btn-start"), bPause=document.getElementByI
 bStart.onclick=()=>{ if(!selectedSubj("timer-subjects")){ logEv("timer-start-fail",{});
     alert("教科をえらんでね"); return; }
   timerState.running=true; timerState.startTs=Date.now();
-  timerState.events.push({t:Date.now(),ev:"start"}); logEv("timer-start",{});
+  timerState.events.push({t:Date.now(),ev:"start"}); logEv("timer-start",{}); saveTimer();
   bStart.disabled=true; bPause.disabled=false; bStop.disabled=false; };
 bPause.onclick=()=>{ timerState.acc+=Date.now()-timerState.startTs; timerState.running=false;
-  timerState.events.push({t:Date.now(),ev:"pause"}); logEv("timer-pause",{});
+  timerState.events.push({t:Date.now(),ev:"pause"}); logEv("timer-pause",{}); saveTimer();
   bStart.disabled=false; bStart.textContent="さいかい"; bPause.disabled=true; };
 let lastTimerEntryId=null;
 bStop.onclick=()=>{
@@ -294,8 +303,21 @@ bStop.onclick=()=>{
   document.getElementById("t-photo-done").style.display="none";
   document.getElementById("timer-after").style.display="block";
   timerState={running:false,startTs:null,acc:0,events:[]}; disp.textContent="00:00:00";
+  localStorage.removeItem(TKEY);
   bStart.disabled=false; bStart.textContent="スタート"; bPause.disabled=true; bStop.disabled=true;
   document.getElementById("timer-unit").value=""; };
+// 開き直したとき、走っとったタイマーを復元（時間は壁時計基準やから離れとった分も正しく進んどる）
+try{ const t=JSON.parse(localStorage.getItem(TKEY));
+  if(t && (t.running||t.acc>0)){
+    timerState={running:t.running, startTs:t.startTs, acc:t.acc, events:t.events||[]};
+    if(t.subj) document.querySelectorAll("#timer-subjects button").forEach(b=>b.classList.toggle("sel",b.textContent===t.subj));
+    if(t.unit) document.getElementById("timer-unit").value=t.unit;
+    disp.textContent=fmt(timerState.acc+(timerState.running?Date.now()-timerState.startTs:0));
+    bStart.disabled=timerState.running; bPause.disabled=!timerState.running; bStop.disabled=false;
+    if(!timerState.running) bStart.textContent="さいかい";
+    logEv("timer-restore",{running:!!t.running});
+  }
+}catch(e){}
 let tRating=null;
 document.querySelectorAll("#t-rating button").forEach(b=>{
   b.onclick=()=>{ document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel"));
