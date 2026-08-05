@@ -276,6 +276,8 @@ function saveTimer(){
 }
 window.addEventListener("pagehide", saveTimer);
 const disp=document.getElementById("timer-display");
+// toISOString()はUTCで朝9時まで前日になるので、日付は必ず日本のローカル時刻から作る（なごみバグ報告第3号）
+function ymd(d=new Date()){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function fmt(ms){ const s=Math.floor(ms/1000);
   return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,"0")).join(":"); }
 setInterval(()=>{ if(timerState.running) disp.textContent=fmt(timerState.acc+(Date.now()-timerState.startTs)); },250);
@@ -294,7 +296,7 @@ bStop.onclick=()=>{
   if(timerState.running){ timerState.acc+=Date.now()-timerState.startTs; }
   const mins=Math.max(1,Math.round(timerState.acc/60000));
   timerState.events.push({t:Date.now(),ev:"stop"});
-  const e={ id:Date.now(), date:new Date().toISOString().slice(0,10),
+  const e={ id:Date.now(), date:ymd(),
     subject:selectedSubj("timer-subjects"), unit:document.getElementById("timer-unit").value.trim(),
     minutes:mins, source:"timer", timerEvents:timerState.events };
   entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject}); scheduleSync();
@@ -332,7 +334,7 @@ document.getElementById("t-done").onclick=()=>{
   document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel")); };
 
 // ---- 手入力 ----
-document.getElementById("m-date").value=new Date().toISOString().slice(0,10);
+document.getElementById("m-date").value=ymd();
 let mRating=null;
 document.querySelectorAll("#m-rating button").forEach(b=>{
   b.onclick=()=>{ document.querySelectorAll("#m-rating button").forEach(x=>x.classList.remove("sel"));
@@ -358,12 +360,12 @@ function fmtMins(m){ return m<60 ? `${m}分` : `${Math.floor(m/60)}時間${m%60?
 
 // ---- カレンダー ----
 let calY=new Date().getFullYear(), calM=new Date().getMonth();
-let selDate=new Date().toISOString().slice(0,10);
+let selDate=ymd();
 function dayTotal(d){ return entries.filter(e=>e.date===d).reduce((a,e)=>a+e.minutes,0); }
 function renderCal(){
   document.getElementById("cal-title").textContent=`${calY}年${calM+1}月`;
   const first=new Date(calY,calM,1).getDay(), days=new Date(calY,calM+1,0).getDate();
-  const today=new Date().toISOString().slice(0,10);
+  const today=ymd();
   let html="<tr>", cell=0;
   for(let i=0;i<first;i++){ html+="<td></td>"; cell++; }
   for(let d=1;d<=days;d++){
@@ -403,7 +405,7 @@ const SUBJ_COLORS={
 function renderStats(){
   const now=new Date(); const week=[];
   for(let i=0;i<7;i++){ const d=new Date(now); d.setDate(d.getDate()-i);
-    week.push(d.toISOString().slice(0,10)); }
+    week.push(ymd(d)); }
   const wk=entries.filter(e=>week.includes(e.date));
   const bySubj={}; wk.forEach(e=>{ bySubj[e.subject]=(bySubj[e.subject]||0)+e.minutes; });
   const max=Math.max(1,...Object.values(bySubj));
@@ -424,7 +426,7 @@ function renderStats(){
 document.getElementById("btn-export").onclick=()=>{
   const blob=new Blob([JSON.stringify({entries,evlog},null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download=`kiroku-iinkai-${new Date().toISOString().slice(0,10)}.json`; a.click(); };
+  a.download=`kiroku-iinkai-${ymd()}.json`; a.click(); };
 document.getElementById("btn-import").onclick=()=>document.getElementById("import-file").click();
 document.getElementById("import-file").onchange=ev=>{
   const f=ev.target.files[0]; if(!f) return;
