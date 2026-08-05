@@ -306,6 +306,8 @@ bStop.onclick=()=>{
     minutes:mins, source:"timer", timerEvents:timerState.events };
   entries.push(e); store.save(entries); logEv("entry-timer",{mins,subject:e.subject}); scheduleSync();
   lastTimerEntryId=e.id;
+  // ふりかえりパネルの相手をlocalStorageにも控える（ページが殺されても写真をつけ直せるように）
+  localStorage.setItem("kiroku-after", String(e.id));
   document.getElementById("t-result").textContent=`${e.subject} ${fmtMins(mins)} を記録したよ 🩹`;
   document.getElementById("t-photo-done").style.display="none";
   document.getElementById("timer-after").style.display="block";
@@ -325,6 +327,17 @@ try{ const t=JSON.parse(localStorage.getItem(TKEY));
     logEv("timer-restore",{running:!!t.running});
   }
 }catch(e){}
+// 停止直後のふりかえりパネルも復元する。カメラ起動中にiOSがページを殺すと、
+// 写真もパネルも無言で消えとった（なごみバグ報告第4号の主犯）
+try{ const aid=+localStorage.getItem("kiroku-after")||0;
+  if(aid){ const e=entries.find(x=>x.id===aid);
+    if(e){ lastTimerEntryId=aid;
+      document.getElementById("t-result").textContent=`${e.subject} ${fmtMins(e.minutes)} を記録したよ 🩹`;
+      if(e.photo) document.getElementById("t-photo-done").style.display="block";
+      document.getElementById("timer-after").style.display="block";
+      logEv("after-restore",{entryId:aid});
+    } else localStorage.removeItem("kiroku-after"); }
+}catch(e){}
 let tRating=null;
 document.querySelectorAll("#t-rating button").forEach(b=>{
   b.onclick=()=>{ document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel"));
@@ -333,7 +346,9 @@ document.getElementById("t-done").onclick=()=>{
   const e=entries.find(x=>x.id===lastTimerEntryId);
   if(e){ if(tRating) e.rating=tRating;
     const memo=document.getElementById("t-memo").value.trim(); if(memo) e.memo=memo;
+    e.mod=Date.now();
     store.save(entries); logEv("timer-reflect",{rating:tRating,hasMemo:!!e.memo}); scheduleSync(); }
+  localStorage.removeItem("kiroku-after");
   document.getElementById("timer-after").style.display="none";
   document.getElementById("t-memo").value=""; tRating=null; lastTimerEntryId=null;
   document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel")); };
@@ -353,7 +368,7 @@ document.getElementById("m-save").onclick=()=>{
     unit:document.getElementById("m-unit").value.trim(), minutes:mins, source:"manual",
     rating:mRating, memo:document.getElementById("m-memo").value.trim() };
   entries.push(e); store.save(entries); logEv("entry-manual",{mins,subject:subj}); scheduleSync();
-  if(mPhotoFile){ attachPhoto(mPhotoFile, e.id); mPhotoFile=null;
+  if(mPhotoDurl){ attachPhotoDurl(mPhotoDurl, e.id); mPhotoDurl=null;
     document.getElementById("m-photo-done").style.display="none"; }
   alert("記録したよ！えらい！ 🩹");
   document.getElementById("m-unit").value=""; document.getElementById("m-mins").value="";
@@ -470,15 +485,21 @@ function compressPhoto(file){ return new Promise((res,rej)=>{
 let photoQueue=[];
 try{ photoQueue=JSON.parse(localStorage.getItem("kiroku-photoq")||"[]"); }catch(e){}
 function savePhotoQ(){ localStorage.setItem("kiroku-photoq", JSON.stringify(photoQueue)); }
-async function attachPhoto(file, entryId){
-  const durl=await compressPhoto(file);
-  await idbPut(entryId, durl);
+// 圧縮済み写真のメモリ控え。IndexedDBが失敗しても同期アップロードはここから拾える
+const pendingPhotos={};
+// フラグ付け・キュー登録は同期処理で先に確定させる。遅いIndexedDB書き込みは後回し
+// （ここが非同期の後ろにあると、記録直後にアプリを閉じたとき写真が無言で消える＝なごみバグ報告第4号）
+function attachPhotoDurl(durl, entryId){
   const e=entries.find(x=>x.id===entryId);
-  if(e){ e.photo=true; store.save(entries); }
+  if(e){ e.photo=true; e.mod=Date.now(); store.save(entries); }
   if(!photoQueue.includes(entryId)){ photoQueue.push(entryId); savePhotoQ(); }
-  logEv("photo-attach",{entryId}); scheduleSync(); }
+  pendingPhotos[entryId]=durl;
+  logEv("photo-attach",{entryId}); scheduleSync();
+  idbPut(entryId,durl).catch(()=>logEv("photo-idb-fail",{entryId})); }
+async function attachPhoto(file, entryId){
+  attachPhotoDurl(await compressPhoto(file), entryId); }
 async function openPhoto(id){
-  let durl=await idbGet(id).catch(()=>null);
+  let durl=await idbGet(id).catch(()=>null) || pendingPhotos[id];
   if(!durl && getToken()){ try{
     const r=await fetch(ghUrl(`photos/${id}.jpg`),{headers:{...ghHdr(),"Accept":"application/vnd.github.raw"}});
     if(r.ok){ const blob=await r.blob();
@@ -520,15 +541,27 @@ function photoWithGuide(fileInputId){
 // タイマー側の写真ボタン
 document.getElementById("t-photo").onclick=()=>photoWithGuide("t-photo-file");
 document.getElementById("t-photo-file").onchange=async ev=>{
-  const f=ev.target.files[0]; if(!f||!lastTimerEntryId) return;
-  await attachPhoto(f, lastTimerEntryId);
-  document.getElementById("t-photo-done").style.display="block"; ev.target.value=""; };
-// 手入力側の写真ボタン（保存時にひもづけ）
-let mPhotoFile=null;
+  const f=ev.target.files[0]; if(!f) return;
+  if(!lastTimerEntryId){ logEv("photo-attach-fail",{reason:"no-entry"});
+    alert("さっきの記録が見つからへん…カレンダーの「あとから記録」で写真をつけてね"); return; }
+  try{ await attachPhoto(f, lastTimerEntryId);
+    document.getElementById("t-photo-done").style.display="block"; }
+  catch(err){ logEv("photo-attach-fail",{entryId:lastTimerEntryId,err:String(err).slice(0,80)});
+    alert("写真がつけられへんかった…もう一回ためしてね"); }
+  ev.target.value=""; };
+// 手入力側の写真ボタン：選んだ瞬間に圧縮まで済ませる
+// （保存ボタンの後ろに遅い処理を残すと、すぐ閉じたとき写真が消える）
+let mPhotoDurl=null;
 document.getElementById("m-photo").onclick=()=>photoWithGuide("m-photo-file");
-document.getElementById("m-photo-file").onchange=ev=>{
-  mPhotoFile=ev.target.files[0]||null;
-  document.getElementById("m-photo-done").style.display=mPhotoFile?"block":"none"; };
+document.getElementById("m-photo-file").onchange=async ev=>{
+  const f=ev.target.files[0];
+  mPhotoDurl=null; document.getElementById("m-photo-done").style.display="none";
+  if(!f) return;
+  try{ mPhotoDurl=await compressPhoto(f);
+    document.getElementById("m-photo-done").style.display="block"; }
+  catch(err){ logEv("photo-attach-fail",{reason:"compress",err:String(err).slice(0,80)});
+    alert("写真が読みこめへんかった…もう一回えらんでね"); }
+  ev.target.value=""; };
 
 // ---- 自動同期（保存先は今までどおり非公開リポ。経路だけ中継サーバ経由に変更） ----
 // 端末に置くのは「あいことば」だけ。GitHubのトークンは中継サーバ側にしか無い。
@@ -559,7 +592,11 @@ async function ghWrite(path, obj, sha){
 function mergeRemote(remote){
   const del=new Set([...(remote&&remote.deleted||[]), ...deletedIds]);
   const map=new Map();
-  [...(remote&&remote.entries||[]), ...entries].forEach(e=>{ if(!del.has(e.id)) map.set(e.id,e); });
+  // 同じidは「あとから更新した方」が勝つ（modが無い記録は作成時刻=idで比べる）。
+  // 単純ローカル優先やと、古いコピーを持つ別端末が写真フラグや手ごたえを剥がしてまう
+  [...(remote&&remote.entries||[]), ...entries].forEach(e=>{ if(del.has(e.id)) return;
+    const p=map.get(e.id);
+    if(!p || (e.mod||e.id)>=(p.mod||p.id)) map.set(e.id,e); });
   entries=[...map.values()].sort((a,b)=>a.id-b.id);
   deletedIds=[...del]; store.save(entries); saveDeleted(); }
 let syncBusy=false, syncQueued=false;
@@ -580,7 +617,7 @@ async function syncNow(){
       await ghWrite(p,evlog,sha); }catch(e){}
     // 写真キューをアップロード（失敗分は次回に持ち越し）
     for(const id of [...photoQueue]){ try{
-      const durl=await idbGet(id);
+      const durl=await idbGet(id).catch(()=>null) || pendingPhotos[id];
       if(!durl){ photoQueue=photoQueue.filter(x=>x!==id); savePhotoQ(); continue; }
       const p=`photos/${id}.jpg`; let psha=null;
       try{ const r=await fetch(ghUrl(p),{headers:ghHdr()}); if(r.ok) psha=(await r.json()).sha; }catch(e){}
