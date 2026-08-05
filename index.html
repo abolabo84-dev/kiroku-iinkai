@@ -231,6 +231,11 @@ const store = {
   save(list){ localStorage.setItem("kiroku-iinkai", JSON.stringify(list)); }
 };
 let entries = store.load();
+// 過去にUTCの日付で保存されてしまったタイマー記録を、止めた瞬間の日本時間の日付に直す
+// （タイマーはid=止めた時刻ミリ秒やから正解が復元できる。手入力は日付を自分で選べるので触らない）
+{ let n=0;
+  entries.forEach(e=>{ if(e.source==="timer"){ const d=ymd(new Date(e.id)); if(e.date!==d){ e.date=d; n++; } } });
+  if(n){ store.save(entries); setTimeout(()=>{ logEv("date-fix",{n}); scheduleSync(); },0); } }
 let deletedIds = [];
 try{ deletedIds = JSON.parse(localStorage.getItem("kiroku-deleted")||"[]"); }catch(e){}
 function saveDeleted(){ localStorage.setItem("kiroku-deleted", JSON.stringify(deletedIds)); }
