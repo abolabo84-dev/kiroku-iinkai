@@ -68,6 +68,9 @@
         font-size:.8rem; cursor:pointer; padding:3px 0;}
   table.cal td.has{background:var(--soft);}
   table.cal td.today{outline:2px solid var(--accent);}
+  #review-list .rv{display:block; width:100%; text-align:left; margin-bottom:6px; padding:11px 12px;
+        border:1.5px solid var(--mint-deep); background:#fff; color:inherit;
+        border-radius:10px; cursor:pointer; font-size:.9rem;}
   table.cal td.testday{background:#fdeacd; outline:1.5px solid #e0a24a;}
   table.cal td .tmark{display:block; font-size:.6rem; line-height:1;}
   table.cal td .mins{display:block; font-size:.6rem; color:var(--mint-deep); font-weight:bold;}
@@ -166,6 +169,12 @@
   <div class="card" id="test-card" style="display:none">
     <div id="test-next" style="font-weight:bold"></div>
     <div id="test-rest" class="small" style="margin-top:6px"></div>
+  </div>
+  <div class="card" id="review-card" style="display:none">
+    <div style="font-weight:bold">🔁 きょうの おもいだしタイム</div>
+    <p class="small" style="margin:6px 0 10px">ノートを見ないで、どうやって解いたか思い出してみて。
+      思い出せたらそれでおしまい。あやしかったら写真で答え合わせ。</p>
+    <div id="review-list"></div>
   </div>
   <div class="card">
     <div class="cal-head">
@@ -400,7 +409,7 @@ function renderCal(){
     html+=`<td class="${tot?'has':''} ${ds===today?'today':''} ${TESTDAYS.has(ds)?'testday':''}" data-d="${ds}">${d}${TESTDAYS.has(ds)?'<span class="tmark">📣</span>':""}${tot?`<span class="mins">${fmtMins(tot)}</span>`:""}</td>`;
     if(++cell%7===0) html+="</tr><tr>"; }
   document.getElementById("cal-body").innerHTML=html+"</tr>";
-  renderTests();
+  renderTests(); renderReview();
   document.querySelectorAll("#cal-body td[data-d]").forEach(td=>{
     td.onclick=()=>{ selDate=td.dataset.d; renderDay(); }; });
   renderDay(); }
@@ -414,9 +423,11 @@ const TESTS=[
   {d:"2026-11-15",n:"合不合判定テスト 第5回"},
   {d:"2026-12-06",n:"合不合判定テスト 第6回"}];
 const TESTDAYS=new Set(TESTS.map(t=>t.d));
-// 日付文字列どうしの日数差。時差もサマータイムも関係ない正午どうしで引く
-function daysUntil(ds){ const [y,m,d]=ds.split("-").map(Number); const t=new Date(y,m-1,d,12);
-  const [Y,M,D]=ymd().split("-").map(Number); return Math.round((t-new Date(Y,M-1,D,12))/86400000); }
+// 日付文字列の計算。時差もサマータイムも関係ないよう、正午どうしで引く
+function dnum(ds){ const [y,m,d]=ds.split("-").map(Number); return new Date(y,m-1,d,12); }
+function dayDiff(a,b){ return Math.round((dnum(b)-dnum(a))/86400000); }
+function addDays(ds,n){ const t=dnum(ds); t.setDate(t.getDate()+n); return ymd(t); }
+function daysUntil(ds){ return dayDiff(ymd(),ds); }
 function renderTests(){
   const up=TESTS.map(t=>({...t,left:daysUntil(t.d)})).filter(t=>t.left>=0);
   const card=document.getElementById("test-card");
@@ -429,6 +440,46 @@ function renderTests(){
     : `📣 ${n.n} まで あと${n.left}日`;
   document.getElementById("test-rest").innerHTML =
     up.slice(1).map(t=>`${t.d.slice(5).replace("-","/")}　${t.n}（あと${t.left}日）`).join("<br>");
+}
+
+// ---- おもいだしタイム（分散復習）----
+// 忘れかけた頃に思い出すと記憶が長くもつ。最適な間隔は「テストまでの期間の10〜20%」
+// （Cepeda+ 2008）。なので次のテストが遠い日にやった単元ほど、間隔を広くとる。
+// 2回目は少し先に置いて、間隔を広げながら2回思い出す形にする。
+const REVIEW_RATIOS=[0.15,0.40];
+function nextTestAfter(ds){ const t=TESTS.find(t=>dayDiff(ds,t.d)>0); return t?t.d:null; }
+function reviewDaysFor(ds){
+  const T=nextTestAfter(ds); if(!T) return [];
+  const span=dayDiff(ds,T); if(span<5) return [];   // テスト直前にやった分は、復習を挟む余地がない
+  return REVIEW_RATIOS.map(r=>addDays(ds,Math.max(2,Math.round(span*r)))).filter(d=>dayDiff(d,T)>0);
+}
+function renderReview(){
+  const today=ymd(), studied={};
+  // Duolingoなどの「その他」は復習の対象にしない
+  entries.forEach(e=>{ if(e.subject==="その他") return; (studied[e.date]??=[]).push(e); });
+  // 20分に満たない日は、思い出すほどの中身がないので対象外
+  Object.keys(studied).forEach(ds=>{
+    if(studied[ds].reduce((s,e)=>s+e.minutes,0)<20) delete studied[ds]; });
+  const due=[], late=[];
+  Object.keys(studied).forEach(ds=>reviewDaysFor(ds).forEach((rd,i)=>{
+    const off=dayDiff(today,rd), it={ds,i,photo:studied[ds].filter(e=>e.photo).length};
+    if(off===0) due.push(it);
+    else if(off<0&&off>=-3) late.push(it); }));
+  // その日ぴったりの分がなければ、逃した分を1件だけ拾う（アプリを開かない日があっても消えないように）
+  if(!due.length&&late.length) due.push(late[late.length-1]);
+  due.sort((a,b)=>a.ds<b.ds?-1:1);
+  const card=document.getElementById("review-card");
+  if(!due.length){ card.style.display="none"; return; }
+  card.style.display="";
+  // ponytail: 提案は1日3件まで。復習したかどうかは記録しとらんので、同じ日が数日続けて出る。
+  //           うるさがられたら「やった」ボタンを足す
+  document.getElementById("review-list").innerHTML=due.slice(0,3).map(x=>{
+    const [,m,d]=x.ds.split("-");
+    return `<button class="rv" data-d="${x.ds}">${+m}月${+d}日 にやったこと${x.i?"（2回目）":""}${x.photo?`　📷${x.photo}`:""}</button>`;
+  }).join("");
+  document.querySelectorAll("#review-list .rv").forEach(b=>{
+    b.onclick=()=>{ selDate=b.dataset.d; renderDay();
+      document.getElementById("day-title").scrollIntoView({behavior:"smooth",block:"start"}); }; });
 }
 document.getElementById("cal-prev").onclick=()=>{ if(--calM<0){calM=11;calY--;} renderCal(); };
 document.getElementById("cal-next").onclick=()=>{ if(++calM>11){calM=0;calY++;} renderCal(); };
