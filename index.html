@@ -68,6 +68,8 @@
         font-size:.8rem; cursor:pointer; padding:3px 0;}
   table.cal td.has{background:var(--soft);}
   table.cal td.today{outline:2px solid var(--accent);}
+  table.cal td.testday{background:#fdeacd; outline:1.5px solid #e0a24a;}
+  table.cal td .tmark{display:block; font-size:.6rem; line-height:1;}
   table.cal td .mins{display:block; font-size:.6rem; color:var(--mint-deep); font-weight:bold;}
   .day-list .entry{display:flex; justify-content:space-between; align-items:center;
         padding:9px 4px; border-bottom:1px dashed #dde8e2; font-size:.9rem;}
@@ -161,6 +163,10 @@
 
 <!-- ===== カレンダー ===== -->
 <section id="view-cal" class="view">
+  <div class="card" id="test-card" style="display:none">
+    <div id="test-next" style="font-weight:bold"></div>
+    <div id="test-rest" class="small" style="margin-top:6px"></div>
+  </div>
   <div class="card">
     <div class="cal-head">
       <button id="cal-prev">←</button>
@@ -391,12 +397,39 @@ function renderCal(){
   for(let d=1;d<=days;d++){
     const ds=`${calY}-${String(calM+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const tot=dayTotal(ds);
-    html+=`<td class="${tot?'has':''} ${ds===today?'today':''}" data-d="${ds}">${d}${tot?`<span class="mins">${fmtMins(tot)}</span>`:""}</td>`;
+    html+=`<td class="${tot?'has':''} ${ds===today?'today':''} ${TESTDAYS.has(ds)?'testday':''}" data-d="${ds}">${d}${TESTDAYS.has(ds)?'<span class="tmark">📣</span>':""}${tot?`<span class="mins">${fmtMins(tot)}</span>`:""}</td>`;
     if(++cell%7===0) html+="</tr><tr>"; }
   document.getElementById("cal-body").innerHTML=html+"</tr>";
+  renderTests();
   document.querySelectorAll("#cal-body td[data-d]").forEach(td=>{
     td.onclick=()=>{ selDate=td.dataset.d; renderDay(); }; });
   renderDay(); }
+// 四谷大塚の公開テスト日程（公式の年間スケジュールより。受ける／受けないに関わらず全部入れとく）
+// 年度が変わったらここに足す。ponytail: 手書きの定数表, 学年が変わるか回数が増えたら外部JSON化
+const TESTS=[
+  {d:"2026-09-06",n:"合不合判定テスト 第3回"},
+  {d:"2026-09-27",n:"公立中高一貫校対策 実力判定テスト 第1回"},
+  {d:"2026-10-11",n:"合不合判定テスト 第4回"},
+  {d:"2026-10-25",n:"公立中高一貫校対策 実力判定テスト 第2回"},
+  {d:"2026-11-15",n:"合不合判定テスト 第5回"},
+  {d:"2026-12-06",n:"合不合判定テスト 第6回"}];
+const TESTDAYS=new Set(TESTS.map(t=>t.d));
+// 日付文字列どうしの日数差。時差もサマータイムも関係ない正午どうしで引く
+function daysUntil(ds){ const [y,m,d]=ds.split("-").map(Number); const t=new Date(y,m-1,d,12);
+  const [Y,M,D]=ymd().split("-").map(Number); return Math.round((t-new Date(Y,M-1,D,12))/86400000); }
+function renderTests(){
+  const up=TESTS.map(t=>({...t,left:daysUntil(t.d)})).filter(t=>t.left>=0);
+  const card=document.getElementById("test-card");
+  if(!up.length){ card.style.display="none"; return; }
+  card.style.display="";
+  const n=up[0];
+  document.getElementById("test-next").textContent =
+    n.left===0? `📣 きょうは ${n.n} の日`
+    : n.left===1? `📣 あした ${n.n}`
+    : `📣 ${n.n} まで あと${n.left}日`;
+  document.getElementById("test-rest").innerHTML =
+    up.slice(1).map(t=>`${t.d.slice(5).replace("-","/")}　${t.n}（あと${t.left}日）`).join("<br>");
+}
 document.getElementById("cal-prev").onclick=()=>{ if(--calM<0){calM=11;calY--;} renderCal(); };
 document.getElementById("cal-next").onclick=()=>{ if(++calM>11){calM=0;calY++;} renderCal(); };
 function renderDay(){
