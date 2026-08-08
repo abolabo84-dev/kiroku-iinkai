@@ -168,6 +168,7 @@
 <section id="view-cal" class="view">
   <div class="card" id="test-card" style="display:none">
     <div id="test-next" style="font-weight:bold"></div>
+    <div id="test-note" class="small" style="margin-top:4px"></div>
     <div id="test-rest" class="small" style="margin-top:6px"></div>
   </div>
   <div class="card" id="review-card" style="display:none">
@@ -415,29 +416,42 @@ function renderCal(){
   renderDay(); }
 // 四谷大塚の公開テスト日程（公式の年間スケジュールより。受ける／受けないに関わらず全部入れとく）
 // 年度が変わったらここに足す。ponytail: 手書きの定数表, 学年が変わるか回数が増えたら外部JSON化
+// untilがあるのは「この期間のあいだに自宅で受ける」タイプ（進学くらぶの配信テスト）
+// ponytail: 後期の週テストは毎週あるはずやが、第1回だけ入れとく。
+//           カウントダウンが週テストで埋まらんか様子を見てから足す
 const TESTS=[
+  {d:"2026-08-10",n:"第2回 講習会判定テスト",until:"2026-08-12",note:"10日の正午から12日の正午までに受ける"},
+  {d:"2026-08-29",n:"後期第1回 週テスト",until:"2026-08-31",note:"29日の正午から31日の正午までに受ける"},
   {d:"2026-09-06",n:"合不合判定テスト 第3回"},
   {d:"2026-09-27",n:"公立中高一貫校対策 実力判定テスト 第1回"},
   {d:"2026-10-11",n:"合不合判定テスト 第4回"},
   {d:"2026-10-25",n:"公立中高一貫校対策 実力判定テスト 第2回"},
   {d:"2026-11-15",n:"合不合判定テスト 第5回"},
   {d:"2026-12-06",n:"合不合判定テスト 第6回"}];
-const TESTDAYS=new Set(TESTS.map(t=>t.d));
+// 期間のあるテストは、その期間の日ぜんぶにカレンダーの印をつける
+const TESTDAYS=new Set(TESTS.flatMap(t=>{
+  const out=[t.d]; let c=t.d;
+  while(t.until&&c<t.until){ c=addDays(c,1); out.push(c); }
+  return out; }));
 // 日付文字列の計算。時差もサマータイムも関係ないよう、正午どうしで引く
 function dnum(ds){ const [y,m,d]=ds.split("-").map(Number); return new Date(y,m-1,d,12); }
 function dayDiff(a,b){ return Math.round((dnum(b)-dnum(a))/86400000); }
 function addDays(ds,n){ const t=dnum(ds); t.setDate(t.getDate()+n); return ymd(t); }
 function daysUntil(ds){ return dayDiff(ymd(),ds); }
 function renderTests(){
-  const up=TESTS.map(t=>({...t,left:daysUntil(t.d)})).filter(t=>t.left>=0);
+  // 期間のあるテストは、終わりの日を過ぎるまで消さない（受けそびれ防止）
+  const up=TESTS.map(t=>({...t,left:daysUntil(t.d)}))
+                .filter(t=>daysUntil(t.until||t.d)>=0);
   const card=document.getElementById("test-card");
   if(!up.length){ card.style.display="none"; return; }
   card.style.display="";
   const n=up[0];
   document.getElementById("test-next").textContent =
-    n.left===0? `📣 きょうは ${n.n} の日`
-    : n.left===1? `📣 あした ${n.n}`
-    : `📣 ${n.n} まで あと${n.left}日`;
+    n.left>1 ? `📣 ${n.n} まで あと${n.left}日`
+    : n.left===1 ? `📣 あした ${n.n}`
+    : n.until ? `📣 いま ${n.n} を受けられます`
+    : `📣 きょうは ${n.n} の日`;
+  document.getElementById("test-note").textContent = n.note||"";
   document.getElementById("test-rest").innerHTML =
     up.slice(1).map(t=>`${t.d.slice(5).replace("-","/")}　${t.n}（あと${t.left}日）`).join("<br>");
 }
