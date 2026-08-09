@@ -78,6 +78,9 @@
         padding:9px 4px; border-bottom:1px dashed #dde8e2; font-size:.9rem;}
   .entry .meta{font-size:.7rem; color:#8a9a90;}
   .entry .del{border:none; background:none; color:var(--danger); font-size:1rem; cursor:pointer;}
+  /* 「きろく完了！」の邪魔をせん見た目にする。事故ったときだけ目に入ればええ */
+  #t-undo{display:block; width:100%; margin-top:8px; padding:9px; border:1px solid #d8ccc2;
+        background:#fff; color:#7a6a5e; border-radius:10px; font-size:.8rem; cursor:pointer;}
   .bar-row{display:flex; align-items:center; gap:8px; margin:6px 0; font-size:.85rem;}
   .bar-row .name{width:3.2em;}
   .bar-row .bar{height:16px; background:var(--mint); border-radius:8px; min-width:2px;}
@@ -132,6 +135,7 @@
       <p class="small" id="t-photo-done" style="display:none">✅ 写真をつけたよ</p>
       <input type="file" id="t-photo-file" accept="image/*" style="display:none">
       <button class="btn-main" id="t-done">きろく完了！</button>
+      <button id="t-undo">↩ まちがえた、つづける</button>
     </div>
   </div>
 </section>
@@ -364,6 +368,30 @@ document.getElementById("t-done").onclick=()=>{
     const memo=document.getElementById("t-memo").value.trim(); if(memo) e.memo=memo;
     e.mod=Date.now();
     store.save(entries); logEv("timer-reflect",{rating:tRating,hasMemo:!!e.memo}); scheduleSync(); }
+  localStorage.removeItem("kiroku-after");
+  document.getElementById("timer-after").style.display="none";
+  document.getElementById("t-memo").value=""; tRating=null; lastTimerEntryId=null;
+  document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel")); };
+// 「ちょっと休憩」のつもりで「おわった！」を押してまう事故がある（なごみ 8/9「休憩です。間違えて終わっちゃったけど。」）。
+// 編集機能が無いので、ここで戻せんと短い記録が壊れたまま残る。「おわった！」に確認ダイアログは足さん（本線が重うなる）。
+document.getElementById("t-undo").onclick=()=>{
+  const e=entries.find(x=>x.id===lastTimerEntryId);
+  if(e){
+    entries=entries.filter(x=>x.id!==e.id);
+    deletedIds.push(e.id); saveDeleted(); store.save(entries); scheduleSync();
+    if(e.photo){ idbDel(e.id).catch(()=>{}); deletePhotoRemote(e.id);
+      photoQueue=photoQueue.filter(x=>x!==e.id); savePhotoQ(); }
+    // ponytail: 秒は分に丸めた時点で失われとる。押し間違いの復帰やから1分未満のズレは許容
+    timerState={running:false, startTs:null, acc:e.minutes*60000,
+      events:(e.timerEvents||[]).filter(x=>x.ev!=="stop")};
+    if(e.subject) document.querySelectorAll("#timer-subjects button")
+      .forEach(b=>b.classList.toggle("sel", b.textContent===e.subject));
+    document.getElementById("timer-unit").value=e.unit||"";
+    saveTimer(); disp.textContent=fmt(timerState.acc);
+    bStart.disabled=false; bStart.textContent="さいかい"; bPause.disabled=true; bStop.disabled=false;
+    logEv("timer-undo",{mins:e.minutes});
+    renderCal();
+  }
   localStorage.removeItem("kiroku-after");
   document.getElementById("timer-after").style.display="none";
   document.getElementById("t-memo").value=""; tRating=null; lastTimerEntryId=null;
