@@ -467,6 +467,7 @@ function reviewDaysFor(ds){
   const span=dayDiff(ds,T); if(span<5) return [];   // テスト直前にやった分は、復習を挟む余地がない
   return REVIEW_RATIOS.map(r=>addDays(ds,Math.max(2,Math.round(span*r)))).filter(d=>dayDiff(d,T)>0);
 }
+let reviewShown=false;
 function renderReview(){
   const today=ymd(), studied={};
   // Duolingoなどの「その他」は復習の対象にしない
@@ -485,6 +486,8 @@ function renderReview(){
   const card=document.getElementById("review-card");
   if(!due.length){ card.style.display="none"; return; }
   card.style.display="";
+  // 見えたのに押されんかったのか、そもそも出とらんかったのかを区別する（1セッション1回だけ）
+  if(!reviewShown){ reviewShown=true; logEv("review-show",{n:due.length}); }
   // ponytail: 提案は1日3件まで。復習したかどうかは記録しとらんので、同じ日が数日続けて出る。
   //           うるさがられたら「やった」ボタンを足す
   document.getElementById("review-list").innerHTML=due.slice(0,3).map(x=>{
@@ -492,7 +495,7 @@ function renderReview(){
     return `<button class="rv" data-d="${x.ds}">${+m}月${+d}日 にやったこと${x.i?"（2回目）":""}${x.photo?`　📷${x.photo}`:""}</button>`;
   }).join("");
   document.querySelectorAll("#review-list .rv").forEach(b=>{
-    b.onclick=()=>{ selDate=b.dataset.d; renderDay();
+    b.onclick=()=>{ logEv("review-open",{d:b.dataset.d}); selDate=b.dataset.d; renderDay();
       document.getElementById("day-title").scrollIntoView({behavior:"smooth",block:"start"}); }; });
 }
 document.getElementById("cal-prev").onclick=()=>{ if(--calM<0){calM=11;calY--;} renderCal(); };
