@@ -489,10 +489,12 @@ function renderTests(){
 // （Cepeda+ 2008）。なので次のテストが遠い日にやった単元ほど、間隔を広くとる。
 // 2回目は少し先に置いて、間隔を広げながら2回思い出す形にする。
 const REVIEW_RATIOS=[0.15,0.40];
-function nextTestAfter(ds){ const t=TESTS.find(t=>dayDiff(ds,t.d)>0); return t?t.d:null; }
+// 直前すぎるテストは基準にしない。挟む余地がないだけで、そのテストが済んだら
+// 次のテストに向けて思い出す価値は残っとるので、5日以上先のテストまで見に行く
+function nextTestAfter(ds){ const t=TESTS.find(t=>dayDiff(ds,t.d)>=5); return t?t.d:null; }
 function reviewDaysFor(ds){
   const T=nextTestAfter(ds); if(!T) return [];
-  const span=dayDiff(ds,T); if(span<5) return [];   // テスト直前にやった分は、復習を挟む余地がない
+  const span=dayDiff(ds,T);
   return REVIEW_RATIOS.map(r=>addDays(ds,Math.max(2,Math.round(span*r)))).filter(d=>dayDiff(d,T)>0);
 }
 let reviewShown=false;
