@@ -53,6 +53,9 @@
   .btn-start{background:var(--mint-deep);}
   .btn-pause{background:var(--accent);}
   .btn-stop{background:#c98f6b;}
+  /* いま押されとるボタンに枠、押せんボタンは薄く（なごみ要望第3号：押したかどうかが見た目でわからん） */
+  .timer-btns button:disabled{opacity:.4;}
+  .timer-btns button.on{opacity:1; outline:3px solid var(--accent); outline-offset:2px;}
   .btn-main{width:100%; padding:13px; border:none; border-radius:14px; background:var(--mint-deep);
         color:#fff; font-size:1.05rem; font-weight:bold; cursor:pointer; margin-top:14px;}
   .rating-row{display:flex; gap:6px;}
@@ -312,10 +315,12 @@ bStart.onclick=()=>{ if(!selectedSubj("timer-subjects")){ logEv("timer-start-fai
     alert("教科をえらんでね"); return; }
   timerState.running=true; timerState.startTs=Date.now();
   timerState.events.push({t:Date.now(),ev:"start"}); logEv("timer-start",{}); saveTimer();
-  bStart.disabled=true; bPause.disabled=false; bStop.disabled=false; };
+  bStart.disabled=true; bPause.disabled=false; bStop.disabled=false;
+  bStart.classList.add("on"); bPause.classList.remove("on"); };
 bPause.onclick=()=>{ timerState.acc+=Date.now()-timerState.startTs; timerState.running=false;
   timerState.events.push({t:Date.now(),ev:"pause"}); logEv("timer-pause",{}); saveTimer();
-  bStart.disabled=false; bStart.textContent="さいかい"; bPause.disabled=true; };
+  bStart.disabled=false; bStart.textContent="さいかい"; bPause.disabled=true;
+  bPause.classList.add("on"); bStart.classList.remove("on"); };
 let lastTimerEntryId=null;
 bStop.onclick=()=>{
   if(timerState.running){ timerState.acc+=Date.now()-timerState.startTs; }
@@ -334,6 +339,7 @@ bStop.onclick=()=>{
   timerState={running:false,startTs:null,acc:0,events:[]}; disp.textContent="00:00:00";
   localStorage.removeItem(TKEY);
   bStart.disabled=false; bStart.textContent="スタート"; bPause.disabled=true; bStop.disabled=true;
+  bStart.classList.remove("on"); bPause.classList.remove("on");
   document.getElementById("timer-unit").value=""; };
 // 開き直したとき、走っとったタイマーを復元（時間は壁時計基準やから離れとった分も正しく進んどる）
 try{ const t=JSON.parse(localStorage.getItem(TKEY));
@@ -343,6 +349,7 @@ try{ const t=JSON.parse(localStorage.getItem(TKEY));
     if(t.unit) document.getElementById("timer-unit").value=t.unit;
     disp.textContent=fmt(timerState.acc+(timerState.running?Date.now()-timerState.startTs:0));
     bStart.disabled=timerState.running; bPause.disabled=!timerState.running; bStop.disabled=false;
+    bStart.classList.toggle("on",timerState.running); bPause.classList.toggle("on",!timerState.running);
     if(!timerState.running) bStart.textContent="さいかい";
     logEv("timer-restore",{running:!!t.running});
   }
