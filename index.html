@@ -135,7 +135,7 @@
       <div class="io-row">
         <button id="t-photo">📷 ノートの写真をつける</button>
       </div>
-      <p class="small" id="t-photo-done" style="display:none">✅ 写真をつけたよ</p>
+      <p class="small" id="t-photo-done" style="display:none">✅ 写真をつけたよ（もう一回押せば何枚でも足せるよ）</p>
       <input type="file" id="t-photo-file" accept="image/*" style="display:none">
       <button class="btn-main" id="t-done">きろく完了！</button>
       <button id="t-undo">↩ まちがえた、つづける</button>
@@ -165,7 +165,7 @@
     <div class="io-row">
       <button id="m-photo">📷 ノートの写真をつける</button>
     </div>
-    <p class="small" id="m-photo-done" style="display:none">✅ 写真をつけたよ</p>
+    <p class="small" id="m-photo-done" style="display:none">✅ 写真をつけたよ（もう一回押せば何枚でも足せるよ）</p>
     <input type="file" id="m-photo-file" accept="image/*" style="display:none">
     <button class="btn-main" id="m-save">記録する</button>
   </div>
@@ -360,7 +360,7 @@ try{ const aid=+localStorage.getItem("kiroku-after")||0;
   if(aid){ const e=entries.find(x=>x.id===aid);
     if(e){ lastTimerEntryId=aid;
       document.getElementById("t-result").textContent=`${e.subject} ${fmtMins(e.minutes)} を記録したよ 🩹`;
-      if(e.photo) document.getElementById("t-photo-done").style.display="block";
+      if(photoCount(e)) showPhotoDone("t-photo-done",photoCount(e));
       document.getElementById("timer-after").style.display="block";
       logEv("after-restore",{entryId:aid});
     } else localStorage.removeItem("kiroku-after"); }
@@ -419,7 +419,7 @@ document.getElementById("m-save").onclick=()=>{
     unit:document.getElementById("m-unit").value.trim(), minutes:mins, source:"manual",
     rating:mRating, memo:document.getElementById("m-memo").value.trim() };
   entries.push(e); store.save(entries); logEv("entry-manual",{mins,subject:subj}); scheduleSync();
-  if(mPhotoDurl){ attachPhotoDurl(mPhotoDurl, e.id); mPhotoDurl=null;
+  if(mPhotoDurls.length){ mPhotoDurls.forEach(d=>attachPhotoDurl(d, e.id)); mPhotoDurls=[];
     document.getElementById("m-photo-done").style.display="none"; }
   alert("記録したよ！えらい！ 🩹");
   document.getElementById("m-unit").value=""; document.getElementById("m-mins").value="";
@@ -514,7 +514,7 @@ function renderReview(){
     if(studied[ds].reduce((s,e)=>s+e.minutes,0)<20) delete studied[ds]; });
   const due=[], late=[];
   Object.keys(studied).forEach(ds=>reviewDaysFor(ds).forEach((rd,i)=>{
-    const off=dayDiff(today,rd), it={ds,i,photo:studied[ds].filter(e=>e.photo).length};
+    const off=dayDiff(today,rd), it={ds,i,photo:studied[ds].reduce((s,e)=>s+photoCount(e),0)};
     if(off===0) due.push(it);
     else if(off<0&&off>=-3) late.push(it); }));
   // その日ぴったりの分がなければ、逃した分を1件だけ拾う（アプリを開かない日があっても消えないように）
@@ -542,18 +542,19 @@ function renderDay(){
   const list=entries.filter(e=>e.date===selDate);
   document.getElementById("day-entries").innerHTML = list.length? list.map(e=>
     `<div class="entry"><div><b>${e.subject}</b> ${e.unit||""}
-      <div class="meta">${fmtMins(e.minutes)}・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${e.photo?` <button class="pv" data-id="${e.id}" style="border:1px solid var(--mint-deep);background:#fff;border-radius:8px;padding:1px 8px;cursor:pointer">📷 しゃしん</button>`:""}${e.memo?`<br>📝${e.memo}`:""}</div></div>
+      <div class="meta">${fmtMins(e.minutes)}・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${Array.from({length:photoCount(e)},(_,i)=>` <button class="pv" data-k="${photoKey(e.id,i+1)}" style="border:1px solid var(--mint-deep);background:#fff;border-radius:8px;padding:1px 8px;cursor:pointer">📷 ${photoCount(e)>1?i+1+"枚目":"しゃしん"}</button>`).join("")}${e.memo?`<br>📝${e.memo}`:""}</div></div>
       <button class="del" data-id="${e.id}">🗑</button></div>`).join("")
     : '<p class="small">この日の記録はまだないよ</p>';
   document.querySelectorAll("#day-entries .pv").forEach(b=>{
-    b.onclick=()=>openPhoto(+b.dataset.id); });
+    b.onclick=()=>openPhoto(parseKey(b.dataset.k)); });
   document.querySelectorAll("#day-entries .del").forEach(b=>{
     b.onclick=()=>{ if(confirm("この記録を消す？")){
-      const id=+b.dataset.id; const hadPhoto=entries.some(e=>e.id===id&&e.photo);
+      const id=+b.dataset.id; const pc=photoCount(entries.find(e=>e.id===id));
       entries=entries.filter(e=>e.id!==id);
       deletedIds.push(id); saveDeleted(); store.save(entries); renderCal(); scheduleSync();
-      if(hadPhoto){ idbDel(id).catch(()=>{}); deletePhotoRemote(id);
-        photoQueue=photoQueue.filter(x=>x!==id); savePhotoQ(); } } }; }); }
+      if(pc){ for(let n=1;n<=pc;n++){ const k=photoKey(id,n);
+          idbDel(k).catch(()=>{}); photoQueue=photoQueue.filter(x=>x!==k); }
+        savePhotoQ(); deletePhotoRemote(id,pc); } } }; }); }
 
 // ---- ぶんせき ----
 const SUBJ_COLORS={
@@ -627,13 +628,21 @@ function savePhotoQ(){ localStorage.setItem("kiroku-photoq", JSON.stringify(phot
 const pendingPhotos={};
 // フラグ付け・キュー登録は同期処理で先に確定させる。遅いIndexedDB書き込みは後回し
 // （ここが非同期の後ろにあると、記録直後にアプリを閉じたとき写真が無言で消える＝なごみバグ報告第4号）
+// 1件に何枚でもつけられる（なごみ報告：2枚目が1枚目を上書きしてた）。
+// 1枚目のキーは今までどおり entryId のまま＝既存の写真はさわらんでええ
+function photoCount(e){ return e&&e.photo ? (e.photo===true?1:+e.photo) : 0; }
+function photoKey(id,n){ return n<=1 ? id : id+"_"+n; }
+function showPhotoDone(elId,n){ const p=document.getElementById(elId);
+  p.textContent=`✅ 写真をつけたよ（${n}枚）　もう一回押せば足せるよ`; p.style.display="block"; }
+const parseKey=s=>/_/.test(s)?s:+s;   // IndexedDBのキーは型がちがうと引けん
 function attachPhotoDurl(durl, entryId){
   const e=entries.find(x=>x.id===entryId);
-  if(e){ e.photo=true; e.mod=Date.now(); store.save(entries); }
-  if(!photoQueue.includes(entryId)){ photoQueue.push(entryId); savePhotoQ(); }
-  pendingPhotos[entryId]=durl;
-  logEv("photo-attach",{entryId}); scheduleSync();
-  idbPut(entryId,durl).catch(()=>logEv("photo-idb-fail",{entryId})); }
+  const n=photoCount(e)+1, key=photoKey(entryId,n);
+  if(e){ e.photo=n; e.mod=Date.now(); store.save(entries); }
+  if(!photoQueue.includes(key)){ photoQueue.push(key); savePhotoQ(); }
+  pendingPhotos[key]=durl;
+  logEv("photo-attach",{entryId,n}); scheduleSync();
+  idbPut(key,durl).catch(()=>logEv("photo-idb-fail",{entryId,n})); }
 async function attachPhoto(file, entryId){
   attachPhotoDurl(await compressPhoto(file), entryId); }
 async function openPhoto(id){
@@ -648,12 +657,13 @@ async function openPhoto(id){
   ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px";
   ov.innerHTML=`<img src="${durl}" style="max-width:100%;max-height:100%;border-radius:12px">`;
   ov.onclick=()=>ov.remove(); document.body.appendChild(ov); }
-async function deletePhotoRemote(id){ if(!getToken()) return; try{
-  const p=`photos/${id}.jpg`;
-  const r=await fetch(ghUrl(p),{headers:ghHdr()}); if(!r.ok) return;
-  const sha=(await r.json()).sha;
-  await fetch(ghUrl(p),{method:"DELETE",headers:ghHdr(),
-    body:JSON.stringify({message:"del photo",sha,branch:"main"})}); }catch(e){} }
+async function deletePhotoRemote(id,count){ if(!getToken()) return;
+  for(let n=1;n<=(count||1);n++){ try{
+    const p=`photos/${photoKey(id,n)}.jpg`;
+    const r=await fetch(ghUrl(p),{headers:ghHdr()}); if(!r.ok) continue;
+    const sha=(await r.json()).sha;
+    await fetch(ghUrl(p),{method:"DELETE",headers:ghHdr(),
+      body:JSON.stringify({message:"del photo",sha,branch:"main"})}); }catch(e){} } }
 // 撮影ガイド（最初の3回はコツを見せてから撮る）
 function showPhotoGuide(onOk){
   const ov=document.createElement("div");
@@ -663,7 +673,7 @@ function showPhotoGuide(onOk){
     <ul style="font-size:.88rem;line-height:1.9;padding-left:1.3em;margin:0 0 6px">
       <li>☀️ 明るい場所で、<b>かげが入らない</b>ように</li>
       <li>⬆️ <b>真上から</b>、ページ全体をおさめる</li>
-      <li>📄 1回に<b>1ページずつ</b>（見開きは2枚に分けて）</li>
+      <li>📄 1回に<b>1ページずつ</b>（見開きは2枚に分けて）<br>1つの記録に<b>何枚でも</b>つけられるよ</li>
       <li>⭕ <b>まるつけのあと</b>に撮ると、あとでまちがいの分析に役立つよ</li>
     </ul>
     <p style="font-size:.72rem;color:#98a49e;margin:0 0 10px">きれいに撮れてると、AIの先輩がノートを読んで分析できるようになるんだ</p>
@@ -683,20 +693,19 @@ document.getElementById("t-photo-file").onchange=async ev=>{
   if(!lastTimerEntryId){ logEv("photo-attach-fail",{reason:"no-entry"});
     alert("さっきの記録が見つからへん…カレンダーの「あとから記録」で写真をつけてね"); return; }
   try{ await attachPhoto(f, lastTimerEntryId);
-    document.getElementById("t-photo-done").style.display="block"; }
+    showPhotoDone("t-photo-done",photoCount(entries.find(x=>x.id===lastTimerEntryId))); }
   catch(err){ logEv("photo-attach-fail",{entryId:lastTimerEntryId,err:String(err).slice(0,80)});
     alert("写真がつけられへんかった…もう一回ためしてね"); }
   ev.target.value=""; };
 // 手入力側の写真ボタン：選んだ瞬間に圧縮まで済ませる
 // （保存ボタンの後ろに遅い処理を残すと、すぐ閉じたとき写真が消える）
-let mPhotoDurl=null;
+let mPhotoDurls=[];
 document.getElementById("m-photo").onclick=()=>photoWithGuide("m-photo-file");
 document.getElementById("m-photo-file").onchange=async ev=>{
   const f=ev.target.files[0];
-  mPhotoDurl=null; document.getElementById("m-photo-done").style.display="none";
   if(!f) return;
-  try{ mPhotoDurl=await compressPhoto(f);
-    document.getElementById("m-photo-done").style.display="block"; }
+  try{ mPhotoDurls.push(await compressPhoto(f));
+    showPhotoDone("m-photo-done",mPhotoDurls.length); }
   catch(err){ logEv("photo-attach-fail",{reason:"compress",err:String(err).slice(0,80)});
     alert("写真が読みこめへんかった…もう一回えらんでね"); }
   ev.target.value=""; };
