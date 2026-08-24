@@ -22,8 +22,10 @@
   main{max-width:640px; margin:0 auto; padding:14px;}
   .tab-bar{position:fixed; bottom:0; left:0; right:0; display:flex; background:var(--paper);
            border-top:2px solid var(--mint); z-index:10; max-width:640px; margin:0 auto;}
-  .tab-bar button{flex:1; border:none; background:none; padding:10px 4px 12px; font-size:.72rem;
-                  color:#8a8a80; cursor:pointer;}
+  .tab-bar button{flex:1; border:none; background:none; padding:10px 2px 12px; font-size:.72rem;
+                  color:#8a8a80; cursor:pointer; white-space:nowrap;}
+  /* タブが5本になったので、狭い画面では文字を一段小さく（折り返し防止） */
+  @media (max-width:389px){ .tab-bar button{font-size:.62rem;} }
   .tab-bar button .ico{display:block; font-size:1.3rem; margin-bottom:2px;}
   .tab-bar button.active{color:var(--mint-deep); font-weight:bold;}
   section.view{display:none;}
@@ -92,6 +94,11 @@
         line-height:1.6; border-left:4px solid var(--mint-deep); margin-bottom:14px;}
   .isaku-msg .who{font-size:.7rem; color:#5aa88f; display:block; margin-bottom:2px;}
   .small{font-size:.72rem; color:#98a49e; line-height:1.5;}
+  #points-list .pt{display:block; width:100%; text-align:left; margin-bottom:8px; padding:10px 12px;
+        border:1.5px solid var(--mint); background:#fff; border-radius:10px; cursor:pointer;
+        font-size:.88rem; color:var(--ink); white-space:pre-wrap; line-height:1.5;}
+  #points-list .pt b{color:#2f5c4d;}
+  #points-list .pt .u{color:#8a9a90; font-size:.75rem;}
   .io-row{display:flex; gap:8px;}
   .io-row button{flex:1; padding:10px; border:1.5px solid var(--mint-deep); background:#fff;
         color:var(--mint-deep); border-radius:10px; cursor:pointer; font-size:.85rem;}
@@ -129,7 +136,9 @@
         <button data-v="3">🙂<br>できた</button>
         <button data-v="4">😊<br>ばっちり！</button>
       </div>
-      <label>メモ（まちがえた問題・気づいたこと）</label>
+      <label>ポイント（といた問題のコツ・まちがえたところ）→📒ポイント帳にたまるよ</label>
+      <textarea id="t-point"></textarea>
+      <label>メモ（きょうの日記・なんでも）</label>
       <textarea id="t-memo"></textarea>
       <label>ノートで勉強したら</label>
       <div class="io-row">
@@ -159,7 +168,9 @@
       <button data-v="3">🙂<br>できた</button>
       <button data-v="4">😊<br>ばっちり！</button>
     </div>
-    <label>メモ（まちがえた問題・気づいたこと）</label>
+    <label>ポイント（といた問題のコツ・まちがえたところ）→📒ポイント帳にたまるよ</label>
+    <textarea id="m-point"></textarea>
+    <label>メモ（きょうの日記・なんでも）</label>
     <textarea id="m-memo"></textarea>
     <label>ノートで勉強したら</label>
     <div class="io-row">
@@ -197,6 +208,16 @@
   <div class="card day-list">
     <h2 id="day-title">きょうの記録</h2>
     <div id="day-entries"></div>
+  </div>
+</section>
+
+<!-- ===== ポイント帳（なごみ要望第5号） ===== -->
+<section id="view-points" class="view">
+  <div class="card bandage">
+    <h2>📒 ポイント帳</h2>
+    <p class="small" style="margin:0 0 10px">きろくのとき「ポイント」欄に書いたことが、ここにたまるよ。</p>
+    <div class="subj-row" id="points-subjects"></div>
+    <div id="points-list" style="margin-top:12px"></div>
   </div>
 </section>
 
@@ -244,6 +265,7 @@
   <button data-view="timer" class="active"><span class="ico">⏱</span>はかる</button>
   <button data-view="manual"><span class="ico">✍️</span>あとから</button>
   <button data-view="cal"><span class="ico">🗓</span>カレンダー</button>
+  <button data-view="points"><span class="ico">📒</span>ポイント</button>
   <button data-view="stats"><span class="ico">📊</span>ぶんせき</button>
 </nav>
 
@@ -278,6 +300,7 @@ document.querySelectorAll(".tab-bar button").forEach(b=>{
     document.getElementById("view-"+b.dataset.view).classList.add("active");
     logEv("tab",{view:b.dataset.view});
     if(b.dataset.view==="cal") renderCal();
+    if(b.dataset.view==="points") renderPoints();
     if(b.dataset.view==="stats") renderStats(); };
 });
 
@@ -373,11 +396,13 @@ document.getElementById("t-done").onclick=()=>{
   const e=entries.find(x=>x.id===lastTimerEntryId);
   if(e){ if(tRating) e.rating=tRating;
     const memo=document.getElementById("t-memo").value.trim(); if(memo) e.memo=memo;
+    const point=document.getElementById("t-point").value.trim(); if(point) e.point=point;
     e.mod=Date.now();
-    store.save(entries); logEv("timer-reflect",{rating:tRating,hasMemo:!!e.memo}); scheduleSync(); }
+    store.save(entries); logEv("timer-reflect",{rating:tRating,hasMemo:!!e.memo,hasPoint:!!e.point}); scheduleSync(); }
   localStorage.removeItem("kiroku-after");
   document.getElementById("timer-after").style.display="none";
-  document.getElementById("t-memo").value=""; tRating=null; lastTimerEntryId=null;
+  document.getElementById("t-memo").value=""; document.getElementById("t-point").value="";
+  tRating=null; lastTimerEntryId=null;
   document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel")); };
 // 「ちょっと休憩」のつもりで「おわった！」を押してまう事故がある（なごみ 8/9「休憩です。間違えて終わっちゃったけど。」）。
 // 編集機能が無いので、ここで戻せんと短い記録が壊れたまま残る。「おわった！」に確認ダイアログは足さん（本線が重うなる）。
@@ -401,7 +426,8 @@ document.getElementById("t-undo").onclick=()=>{
   }
   localStorage.removeItem("kiroku-after");
   document.getElementById("timer-after").style.display="none";
-  document.getElementById("t-memo").value=""; tRating=null; lastTimerEntryId=null;
+  document.getElementById("t-memo").value=""; document.getElementById("t-point").value="";
+  tRating=null; lastTimerEntryId=null;
   document.querySelectorAll("#t-rating button").forEach(x=>x.classList.remove("sel")); };
 
 // ---- 手入力 ----
@@ -417,13 +443,15 @@ document.getElementById("m-save").onclick=()=>{
     alert("教科と時間を入れてね"); return; }
   const e={ id:Date.now(), date:document.getElementById("m-date").value, subject:subj,
     unit:document.getElementById("m-unit").value.trim(), minutes:mins, source:"manual",
-    rating:mRating, memo:document.getElementById("m-memo").value.trim() };
-  entries.push(e); store.save(entries); logEv("entry-manual",{mins,subject:subj}); scheduleSync();
+    rating:mRating, memo:document.getElementById("m-memo").value.trim(),
+    point:document.getElementById("m-point").value.trim() };
+  entries.push(e); store.save(entries);
+  logEv("entry-manual",{mins,subject:subj,hasPoint:!!e.point}); scheduleSync();
   if(mPhotoDurls.length){ mPhotoDurls.forEach(d=>attachPhotoDurl(d, e.id)); mPhotoDurls=[];
     document.getElementById("m-photo-done").style.display="none"; }
   alert("記録したよ！えらい！ 🩹");
   document.getElementById("m-unit").value=""; document.getElementById("m-mins").value="";
-  document.getElementById("m-memo").value=""; mRating=null;
+  document.getElementById("m-memo").value=""; document.getElementById("m-point").value=""; mRating=null;
   document.querySelectorAll("#m-rating button").forEach(x=>x.classList.remove("sel")); };
 
 // 分→「何時間何分」表記（なごみ要望第3号）
@@ -555,6 +583,30 @@ function renderDay(){
       if(pc){ for(let n=1;n<=pc;n++){ const k=photoKey(id,n);
           idbDel(k).catch(()=>{}); photoQueue=photoQueue.filter(x=>x!==k); }
         savePhotoQ(); deletePhotoRemote(id,pc); } } }; }); }
+
+// ---- ポイント帳（なごみ要望第5号：日記メモと分けて、あとで見返すポイントを速く探せる場所） ----
+let pointsFilter=null; // null=ぜんぶ
+{ const c=document.getElementById("points-subjects");
+  ["ぜんぶ",...SUBJECTS].forEach(s=>{ const b=document.createElement("button"); b.textContent=s;
+    if(s==="ぜんぶ") b.classList.add("sel");
+    b.onclick=()=>{ c.querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
+      b.classList.add("sel"); pointsFilter=(s==="ぜんぶ")?null:s;
+      logEv("points-filter",{subj:s}); renderPoints(); };
+    c.appendChild(b); }); }
+function renderPoints(){
+  const list=entries.filter(e=>e.point&&(!pointsFilter||e.subject===pointsFilter))
+    .sort((a,b)=>b.id-a.id);
+  logEv("points-view",{n:list.length,subj:pointsFilter});
+  document.getElementById("points-list").innerHTML = list.length? list.map(e=>{
+    const [,m,d]=e.date.split("-");
+    return `<button class="pt" data-d="${e.date}"><b>${+m}月${+d}日　${e.subject}</b>　<span class="u">${e.unit||""}</span>
+${e.point}</button>`;
+  }).join("") : '<p class="small">ポイントはまだないよ。きろくのときに「ポイント」欄に書くと、ここにたまっていくよ。</p>';
+  document.querySelectorAll("#points-list .pt").forEach(b=>{
+    b.onclick=()=>{ logEv("points-jump",{d:b.dataset.d});
+      const [Y,M]=b.dataset.d.split("-"); calY=+Y; calM=+M-1; selDate=b.dataset.d;
+      document.querySelector('.tab-bar button[data-view="cal"]').click();
+      document.getElementById("day-title").scrollIntoView({behavior:"smooth",block:"start"}); }; }); }
 
 // ---- ぶんせき ----
 const SUBJ_COLORS={
