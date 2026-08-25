@@ -99,6 +99,16 @@
         font-size:.88rem; color:var(--ink); white-space:pre-wrap; line-height:1.5;}
   #points-list .pt b{color:#2f5c4d;}
   #points-list .pt .u{color:#8a9a90; font-size:.75rem;}
+  #points-list .pt.face{background:var(--soft); border-style:dashed; border-color:var(--mint-deep);}
+  /* 教科ごとの本が育つ本棚（ポイ活作戦・パパ発案の③） */
+  #points-shelf{display:flex; align-items:flex-end; gap:10px; min-height:44px;
+        border-bottom:4px solid #d9b98e; margin:2px 0 12px; padding:0 6px;}
+  #points-shelf .book{width:32px; border-radius:5px 5px 0 0; display:flex; flex-direction:column;
+        justify-content:flex-end; align-items:center; font-size:.74rem; padding-bottom:1px;
+        cursor:pointer; color:#3d4a42;}
+  #points-shelf .book .bn{font-size:.6rem; color:#4a5a52;}
+  #p-flip{display:block; width:100%; margin-top:10px; padding:9px; border:1.5px solid var(--mint-deep);
+        background:#fff; color:var(--mint-deep); border-radius:10px; cursor:pointer; font-size:.85rem;}
   .io-row{display:flex; gap:8px;}
   .io-row button{flex:1; padding:10px; border:1.5px solid var(--mint-deep); background:#fff;
         color:var(--mint-deep); border-radius:10px; cursor:pointer; font-size:.85rem;}
@@ -223,8 +233,10 @@
   </div>
   <div class="card bandage">
     <h2>📒 ポイント帳　<span id="points-count" style="font-size:.8rem; color:var(--mint-deep)"></span></h2>
+    <div id="points-shelf" style="display:none"></div>
     <p class="small" id="points-cheer" style="margin:0 0 10px"></p>
     <div class="subj-row" id="points-subjects"></div>
+    <button id="p-flip">🎴 めくって思い出す</button>
     <div id="points-list" style="margin-top:12px"></div>
   </div>
 </section>
@@ -622,13 +634,58 @@ function pointsCheer(n){
   if(n>=10)  return `ポイント${n}個。棚がちゃんと本棚になってきた。`;
   if(n>=5)   return `ポイント${n}個。いい調子。`;
   return ""; }
+// 教科ごとの本が育つ本棚。たまるほど背が伸びる（数字の報告だけ、ごほうびは無し）
+function renderShelf(all){
+  const counts={}; all.forEach(x=>counts[x.subject]=(counts[x.subject]||0)+1);
+  const el=document.getElementById("points-shelf");
+  const subs=SUBJECTS.filter(s=>counts[s]);
+  if(!subs.length){ el.style.display="none"; return; }
+  el.style.display="flex";
+  el.innerHTML=subs.map(s=>{
+    const c=SUBJ_COLORS[s]||{}; const n=counts[s];
+    return `<div class="book" data-s="${s}" style="height:${Math.min(72,18+n*5)}px; background:${c.bg||"var(--mint)"}; border:1.5px solid ${c.line||"var(--mint-deep)"}; border-bottom:none">${s==="その他"?"他":s[0]}<span class="bn">${n}</span></div>`;
+  }).join("");
+  el.querySelectorAll(".book").forEach(bk=>{ bk.onclick=()=>{
+    const btn=[...document.querySelectorAll("#points-subjects button")].find(b=>b.textContent===bk.dataset.s);
+    if(btn) btn.click(); }; }); }
+// めくって思い出すモード（ポイ活作戦の本丸：ポイント帳がそのまま暗記カードになる。
+// めくった裏に同じ日のメモを添える＝日記帳×暗記カード。文脈が思い出す手がかりになる）
+let flipMode=false;
+document.getElementById("p-flip").onclick=()=>{
+  flipMode=!flipMode; logEv(flipMode?"flip-on":"flip-off",{}); renderPoints(); };
+function renderFlip(list){
+  const order=[...list].sort(()=>Math.random()-.5);
+  let opened=0;
+  document.getElementById("points-list").innerHTML = order.length? order.map((x,i)=>{
+    const [,m,d]=x.date.split("-");
+    return `<button class="pt face" data-i="${i}"><b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>
+🎴 なんて書いたか、思い出してからめくってね</button>`;
+  }).join("") : '<p class="small">めくるポイントがまだないよ。</p>';
+  document.querySelectorAll("#points-list .pt.face").forEach(b=>{
+    b.onclick=()=>{ const x=order[+b.dataset.i];
+      const memos=entries.filter(e=>e.date===x.date&&e.memo&&e.memo.trim()&&e.memo!==x.text);
+      const mm=memos.length?memos[Math.floor(Math.random()*memos.length)].memo:"";
+      const clip=mm.length>90?mm.slice(0,90)+"…":mm;
+      const [,m,d]=x.date.split("-");
+      b.classList.remove("face");
+      b.innerHTML=`<b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>
+${x.text}${clip?`
+<span class="u">📖 この日のメモ：「${clip}」</span>`:""}`;
+      b.onclick=null; logEv("flip-open",{});
+      if(++opened===order.length){
+        document.getElementById("points-cheer").textContent=`ぜんぶめくった！　${order.length}枚、おつかれさま。`;
+        logEv("flip-done",{n:order.length}); } }; }); }
 function renderPoints(){
   const all=allPoints();
   const list=all.filter(x=>!pointsFilter||x.subject===pointsFilter).sort((a,b)=>b.id-a.id);
-  logEv("points-view",{n:list.length,subj:pointsFilter});
+  logEv("points-view",{n:list.length,subj:pointsFilter,flip:flipMode});
   document.getElementById("points-count").textContent = all.length?`${all.length}個`:"";
-  document.getElementById("points-cheer").textContent =
-    pointsCheer(all.length) || "きろくのとき「ポイント」欄に書いたことと、上で足したことが、ここにたまるよ。";
+  renderShelf(all);
+  document.getElementById("p-flip").textContent = flipMode?"📖 ふつうの一覧にもどる":"🎴 めくって思い出す";
+  document.getElementById("points-cheer").textContent = flipMode
+    ? "順番はシャッフルしてあるよ。思い出してからめくるのがコツ。"
+    : (pointsCheer(all.length) || "きろくのとき「ポイント」欄に書いたことと、上で足したことが、ここにたまるよ。");
+  if(flipMode){ renderFlip(list); return; }
   document.getElementById("points-list").innerHTML = list.length? list.map(x=>{
     const [,m,d]=x.date.split("-");
     return `<button class="pt" data-d="${x.date}"><b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>${x.solo?`<span class="pdel" data-id="${x.id}" style="float:right; color:var(--danger)">🗑</span>`:""}
