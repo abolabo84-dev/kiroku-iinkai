@@ -213,9 +213,17 @@
 
 <!-- ===== ポイント帳（なごみ要望第5号） ===== -->
 <section id="view-points" class="view">
+  <div class="card">
+    <h2>➕ ポイントを足す</h2>
+    <label>教科</label>
+    <div class="subj-row" id="p-subjects"></div>
+    <label>ポイント（思いついたら、いつでも）</label>
+    <textarea id="p-text"></textarea>
+    <button class="btn-main" id="p-save">📒 ポイント帳に入れる</button>
+  </div>
   <div class="card bandage">
-    <h2>📒 ポイント帳</h2>
-    <p class="small" style="margin:0 0 10px">きろくのとき「ポイント」欄に書いたことが、ここにたまるよ。</p>
+    <h2>📒 ポイント帳　<span id="points-count" style="font-size:.8rem; color:var(--mint-deep)"></span></h2>
+    <p class="small" id="points-cheer" style="margin:0 0 10px"></p>
     <div class="subj-row" id="points-subjects"></div>
     <div id="points-list" style="margin-top:12px"></div>
   </div>
@@ -284,6 +292,13 @@ let entries = store.load();
 let deletedIds = [];
 try{ deletedIds = JSON.parse(localStorage.getItem("kiroku-deleted")||"[]"); }catch(e){}
 function saveDeleted(){ localStorage.setItem("kiroku-deleted", JSON.stringify(deletedIds)); }
+// 記録に紐づかない単独ポイント（なごみ要望第6号：ポイント帳から直接足す）
+let points = [];
+try{ points = JSON.parse(localStorage.getItem("kiroku-points")||"[]"); }catch(e){}
+function savePoints(){ localStorage.setItem("kiroku-points", JSON.stringify(points)); }
+let deletedPointIds = [];
+try{ deletedPointIds = JSON.parse(localStorage.getItem("kiroku-delpoints")||"[]"); }catch(e){}
+function saveDeletedPoints(){ localStorage.setItem("kiroku-delpoints", JSON.stringify(deletedPointIds)); }
 
 // ---- 方針: 全操作イベントもログする（テストプレイ＝データ） ----
 let evlog = [];
@@ -593,20 +608,55 @@ let pointsFilter=null; // null=ぜんぶ
       b.classList.add("sel"); pointsFilter=(s==="ぜんぶ")?null:s;
       logEv("points-filter",{subj:s}); renderPoints(); };
     c.appendChild(b); }); }
+// 記録についたポイントと、単独ポイントを1つの棚にまとめる
+function allPoints(){
+  return [
+    ...entries.filter(e=>e.point).map(e=>({id:e.id,date:e.date,subject:e.subject,unit:e.unit,text:e.point,solo:false})),
+    ...points.map(p=>({id:p.id,date:p.date,subject:p.subject,text:p.text,solo:true}))
+  ]; }
+// たまった数への先輩のことば（ポイ活作戦。数字とことばの報告だけ。ごほうびは出さん——やる気を削るので）
+function pointsCheer(n){
+  if(n>=100) return `ポイント${n}個。もう1冊、自分で参考書を書いたのと同じだね。`;
+  if(n>=50)  return `ポイント${n}個。この棚、自分だけの参考書になってきた。`;
+  if(n>=25)  return `ポイント${n}個。テスト前に見返すのが楽しみな量になってきたね。`;
+  if(n>=10)  return `ポイント${n}個。棚がちゃんと本棚になってきた。`;
+  if(n>=5)   return `ポイント${n}個。いい調子。`;
+  return ""; }
 function renderPoints(){
-  const list=entries.filter(e=>e.point&&(!pointsFilter||e.subject===pointsFilter))
-    .sort((a,b)=>b.id-a.id);
+  const all=allPoints();
+  const list=all.filter(x=>!pointsFilter||x.subject===pointsFilter).sort((a,b)=>b.id-a.id);
   logEv("points-view",{n:list.length,subj:pointsFilter});
-  document.getElementById("points-list").innerHTML = list.length? list.map(e=>{
-    const [,m,d]=e.date.split("-");
-    return `<button class="pt" data-d="${e.date}"><b>${+m}月${+d}日　${e.subject}</b>　<span class="u">${e.unit||""}</span>
-${e.point}</button>`;
-  }).join("") : '<p class="small">ポイントはまだないよ。きろくのときに「ポイント」欄に書くと、ここにたまっていくよ。</p>';
+  document.getElementById("points-count").textContent = all.length?`${all.length}個`:"";
+  document.getElementById("points-cheer").textContent =
+    pointsCheer(all.length) || "きろくのとき「ポイント」欄に書いたことと、上で足したことが、ここにたまるよ。";
+  document.getElementById("points-list").innerHTML = list.length? list.map(x=>{
+    const [,m,d]=x.date.split("-");
+    return `<button class="pt" data-d="${x.date}"><b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>${x.solo?`<span class="pdel" data-id="${x.id}" style="float:right; color:var(--danger)">🗑</span>`:""}
+${x.text}</button>`;
+  }).join("") : '<p class="small">ポイントはまだないよ。</p>';
   document.querySelectorAll("#points-list .pt").forEach(b=>{
     b.onclick=()=>{ logEv("points-jump",{d:b.dataset.d});
       const [Y,M]=b.dataset.d.split("-"); calY=+Y; calM=+M-1; selDate=b.dataset.d;
       document.querySelector('.tab-bar button[data-view="cal"]').click();
-      document.getElementById("day-title").scrollIntoView({behavior:"smooth",block:"start"}); }; }); }
+      document.getElementById("day-title").scrollIntoView({behavior:"smooth",block:"start"}); }; });
+  document.querySelectorAll("#points-list .pdel").forEach(s=>{
+    s.onclick=ev=>{ ev.stopPropagation();
+      if(confirm("このポイントを消す？")){
+        const id=+s.dataset.id;
+        points=points.filter(p=>p.id!==id);
+        deletedPointIds.push(id); savePoints(); saveDeletedPoints(); scheduleSync();
+        logEv("point-del",{}); renderPoints(); } }; }); }
+// 単独ポイントの入力（要望第6号：思いついた時に、記録を止めんでも書ける）
+makeSubjButtons("p-subjects");
+document.getElementById("p-save").onclick=()=>{
+  const subj=selectedSubj("p-subjects"), text=document.getElementById("p-text").value.trim();
+  if(!subj||!text){ logEv("point-add-fail",{hasSubj:!!subj,hasText:!!text});
+    alert("教科とポイントを入れてね"); return; }
+  points.push({id:Date.now(), date:ymd(), subject:subj, text});
+  savePoints(); logEv("point-add",{subject:subj,len:text.length}); scheduleSync();
+  document.getElementById("p-text").value="";
+  document.querySelectorAll("#p-subjects button").forEach(x=>x.classList.remove("sel"));
+  renderPoints(); };
 
 // ---- ぶんせき ----
 const SUBJ_COLORS={
@@ -635,7 +685,7 @@ function renderStats(){
 
 // ---- 書き出し／読み込み ----
 document.getElementById("btn-export").onclick=()=>{
-  const blob=new Blob([JSON.stringify({entries,evlog},null,1)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({entries,points,evlog},null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download=`kiroku-iinkai-${ymd()}.json`; a.click(); };
 document.getElementById("btn-import").onclick=()=>document.getElementById("import-file").click();
@@ -645,7 +695,10 @@ document.getElementById("import-file").onchange=ev=>{
     const data=JSON.parse(r.result); const inc=data.entries||[];
     const ids=new Set(entries.map(e=>e.id));
     inc.forEach(e=>{ if(!ids.has(e.id)) entries.push(e); });
-    store.save(entries); alert(`読み込んだよ（合計 ${entries.length}件）`); renderCal();
+    const pids=new Set(points.map(p=>p.id));
+    (data.points||[]).forEach(p=>{ if(!pids.has(p.id)) points.push(p); });
+    store.save(entries); savePoints();
+    alert(`読み込んだよ（合計 ${entries.length}件）`); renderCal();
   }catch(e){ alert("読み込めなかった…ファイルを確認してね"); } }; r.readAsText(f); };
 
 // ---- 写真（縮小→IndexedDBに保存→同期でアップロード） ----
@@ -797,7 +850,16 @@ function mergeRemote(remote){
     const p=map.get(e.id);
     if(!p || (e.mod||e.id)>=(p.mod||p.id)) map.set(e.id,e); });
   entries=[...map.values()].sort((a,b)=>a.id-b.id);
-  deletedIds=[...del]; store.save(entries); saveDeleted(); }
+  deletedIds=[...del]; store.save(entries); saveDeleted();
+  // 単独ポイントも同じ流儀でマージ（同じidはmodが新しい方、削除は集合の和）
+  // ponytail: 旧版アプリが同期するとdata.jsonからpointsが一時落ちるが、新版端末の次の同期で戻る
+  const delP=new Set([...(remote&&remote.deletedPoints||[]), ...deletedPointIds]);
+  const mapP=new Map();
+  [...(remote&&remote.points||[]), ...points].forEach(p=>{ if(delP.has(p.id)) return;
+    const q=mapP.get(p.id);
+    if(!q || (p.mod||p.id)>=(q.mod||q.id)) mapP.set(p.id,p); });
+  points=[...mapP.values()].sort((a,b)=>a.id-b.id);
+  deletedPointIds=[...delP]; savePoints(); saveDeletedPoints(); }
 let syncBusy=false, syncQueued=false;
 function setSyncStatus(msg){ const el=document.getElementById("sync-status"); if(el) el.textContent=msg; }
 async function syncNow(){
@@ -808,7 +870,7 @@ async function syncNow(){
     for(let tries=0;;tries++){
       const {data,sha}=await ghRead(SYNC.path);
       mergeRemote(data);
-      try{ await ghWrite(SYNC.path,{entries,deleted:deletedIds},sha); break; }
+      try{ await ghWrite(SYNC.path,{entries,deleted:deletedIds,points,deletedPoints:deletedPointIds},sha); break; }
       catch(e){ if(tries>=2) throw e; } // sha競合→読み直して再試行
     }
     // 操作ログは端末別ファイルに（失敗しても無視）
