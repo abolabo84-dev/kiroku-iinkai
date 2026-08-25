@@ -101,9 +101,9 @@
   #points-list .pt .u{color:#8a9a90; font-size:.75rem;}
   #points-list .pt.face{background:var(--soft); border-style:dashed; border-color:var(--mint-deep);}
   /* 教科ごとの本が育つ本棚（ポイ活作戦・パパ発案の③） */
-  #points-shelf{display:flex; align-items:flex-end; gap:10px; min-height:44px;
+  #points-shelf{display:flex; align-items:flex-end; gap:6px; min-height:44px; overflow-x:auto;
         border-bottom:4px solid #d9b98e; margin:2px 0 12px; padding:0 6px;}
-  #points-shelf .book{width:32px; border-radius:5px 5px 0 0; display:flex; flex-direction:column;
+  #points-shelf .book{width:28px; flex-shrink:0; border-radius:5px 5px 0 0; display:flex; flex-direction:column;
         justify-content:flex-end; align-items:center; font-size:.74rem; padding-bottom:1px;
         cursor:pointer; color:#3d4a42;}
   #points-shelf .book .bn{font-size:.6rem; color:#4a5a52;}
@@ -628,13 +628,14 @@ function allPoints(){
   ]; }
 // たまった数への先輩のことば（ポイ活作戦。数字とことばの報告だけ。ごほうびは出さん——やる気を削るので）
 function pointsCheer(n){
-  if(n>=100) return `ポイント${n}個。もう1冊、自分で参考書を書いたのと同じだね。`;
-  if(n>=50)  return `ポイント${n}個。この棚、自分だけの参考書になってきた。`;
+  if(n>=100) return `ポイント${n}個。棚に10冊。りっぱな自分専用の参考書棚だね。`;
+  if(n>=50)  return `ポイント${n}個。もう5冊分。自分で参考書を書いてるのと同じだよ。`;
   if(n>=25)  return `ポイント${n}個。テスト前に見返すのが楽しみな量になってきたね。`;
-  if(n>=10)  return `ポイント${n}個。棚がちゃんと本棚になってきた。`;
+  if(n>=10)  return `ポイント${n}個。1冊目がいっぱいになった。となりに2冊目が生えるよ。`;
   if(n>=5)   return `ポイント${n}個。いい調子。`;
   return ""; }
-// 教科ごとの本が育つ本棚。たまるほど背が伸びる（数字の報告だけ、ごほうびは無し）
+// 教科ごとの本が育つ本棚。10個で1冊がいっぱいになり、次の1冊が生える（天井なし）
+const VOL=10;
 function renderShelf(all){
   const counts={}; all.forEach(x=>counts[x.subject]=(counts[x.subject]||0)+1);
   const el=document.getElementById("points-shelf");
@@ -643,7 +644,14 @@ function renderShelf(all){
   el.style.display="flex";
   el.innerHTML=subs.map(s=>{
     const c=SUBJ_COLORS[s]||{}; const n=counts[s];
-    return `<div class="book" data-s="${s}" style="height:${Math.min(72,18+n*5)}px; background:${c.bg||"var(--mint)"}; border:1.5px solid ${c.line||"var(--mint-deep)"}; border-bottom:none">${s==="その他"?"他":s[0]}<span class="bn">${n}</span></div>`;
+    const full=Math.floor(n/VOL), rest=n%VOL, ch=s==="その他"?"他":s[0];
+    const style=`background:${c.bg||"var(--mint)"}; border:1.5px solid ${c.line||"var(--mint-deep)"}; border-bottom:none`;
+    let books="";
+    for(let i=0;i<full;i++)
+      books+=`<div class="book" data-s="${s}" style="height:68px; ${style}">${ch}${(i===full-1&&!rest)?`<span class="bn">${n}</span>`:""}</div>`;
+    if(rest)
+      books+=`<div class="book" data-s="${s}" style="height:${18+rest*5}px; ${style}">${ch}<span class="bn">${n}</span></div>`;
+    return books;
   }).join("");
   el.querySelectorAll(".book").forEach(bk=>{ bk.onclick=()=>{
     const btn=[...document.querySelectorAll("#points-subjects button")].find(b=>b.textContent===bk.dataset.s);
