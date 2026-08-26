@@ -632,12 +632,13 @@ function allPoints(){
     ...points.map(p=>({id:p.id,date:p.date,subject:p.subject,text:p.text,solo:true}))
   ]; }
 // たまった数への先輩のことば（ポイ活作戦。数字とことばの報告だけ。ごほうびは出さん——やる気を削るので）
-function pointsCheer(n){
-  const v=Math.floor(n/VOL);
-  if(n>=100) return `ポイント${n}個、満杯の本が${v}冊。りっぱな自分専用の参考書棚だね。`;
-  if(n>=50)  return `ポイント${n}個、満杯の本が${v}冊。自分で参考書を書いてるのと同じだよ。`;
+// vols=満杯の冊数（教科ごとに10個で1冊。合計÷10やないことに注意——一度ズレて指摘の先を越された）
+function pointsCheer(n,vols){
+  if(vols>=10) return `ポイント${n}個、満杯の本が${vols}冊。りっぱな自分専用の参考書棚だね。`;
+  if(vols>=5)  return `ポイント${n}個、満杯の本が${vols}冊。自分で参考書を書いてるのと同じだよ。`;
   if(n>=25)  return `ポイント${n}個。テスト前に見返すのが楽しみな量になってきたね。`;
-  if(n>=10)  return `ポイント${n}個。1冊目が満杯になった。上の段に収まって、新しい1冊が生えるよ。`;
+  if(vols>=1)  return `ポイント${n}個、満杯の本が${vols}冊。上の段に収まってるよ。`;
+  if(n>=10)  return `ポイント${n}個。どれかの教科が10個たまると、1冊目が満杯になるよ。`;
   if(n>=5)   return `ポイント${n}個。いい調子。`;
   return ""; }
 // 教科ごとの本が育つ本棚。10個で1冊満杯→小さくなって上の段へ収まり、段が増えていく
@@ -701,9 +702,11 @@ function renderPoints(){
   document.getElementById("points-count").textContent = all.length?`${all.length}個`:"";
   renderShelf(all);
   document.getElementById("p-flip").textContent = flipMode?"📖 ふつうの一覧にもどる":"🎴 めくって思い出す";
+  const cnts={}; all.forEach(x=>cnts[x.subject]=(cnts[x.subject]||0)+1);
+  const vols=Object.values(cnts).reduce((a,c)=>a+Math.floor(c/VOL),0);
   document.getElementById("points-cheer").textContent = flipMode
     ? "順番はシャッフルしてあるよ。思い出してからめくるのがコツ。"
-    : (pointsCheer(all.length) || "きろくのとき「ポイント」欄に書いたことと、上で足したことが、ここにたまるよ。");
+    : (pointsCheer(all.length,vols) || "きろくのとき「ポイント」欄に書いたことと、上で足したことが、ここにたまるよ。");
   if(flipMode){ renderFlip(list); return; }
   document.getElementById("points-list").innerHTML = list.length? list.map(x=>{
     const [,m,d]=x.date.split("-");
