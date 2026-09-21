@@ -587,12 +587,21 @@ function renderReview(){
   if(!reviewShown){ reviewShown=true; logEv("review-show",{n:due.length}); }
   // ponytail: 提案は1日3件まで。復習したかどうかは記録しとらんので、同じ日が数日続けて出る。
   //           うるさがられたら「やった」ボタンを足す
+  // 2026-09-21 ポイント帳と連携：その日にポイントがあれば「めくる」に直行する。
+  //   理由＝9/5〜9/21の17日間、おもいだしタイムは毎日出とったのに review-open が0。
+  //   同じ期間にポイント帳は毎週ひらかれとる＝押されとるのは自分で書いたカードのほうやった
   document.getElementById("review-list").innerHTML=due.slice(0,3).map(x=>{
     const [,m,d]=x.ds.split("-");
-    return `<button class="rv" data-d="${x.ds}">${+m}月${+d}日 にやったこと${x.i?"（2回目）":""}${x.photo?`　📷${x.photo}`:""}</button>`;
+    const np=allPoints().filter(p=>p.date===x.ds).length;
+    return `<button class="rv" data-d="${x.ds}" data-np="${np}">${+m}月${+d}日 ${np?`のポイント ${np}枚をめくる`:"にやったこと"}${x.i?"（2回目）":""}${x.photo?`　📷${x.photo}`:""}</button>`;
   }).join("");
   document.querySelectorAll("#review-list .rv").forEach(b=>{
-    b.onclick=()=>{ logEv("review-open",{d:b.dataset.d}); selDate=b.dataset.d; renderDay();
+    b.onclick=()=>{ const ds=b.dataset.d, np=+b.dataset.np;
+      logEv("review-open",{d:ds,mode:np?"points":"day",n:np});
+      if(np){ flipOnly=ds; flipMode=true;
+        document.querySelector('.tab-bar button[data-view="points"]').click();
+        document.getElementById("points-cheer").scrollIntoView({behavior:"smooth",block:"start"}); return; }
+      selDate=ds; renderDay();
       document.getElementById("day-title").scrollIntoView({behavior:"smooth",block:"start"}); }; });
 }
 document.getElementById("cal-prev").onclick=()=>{ if(--calM<0){calM=11;calY--;} renderCal(); };
@@ -671,7 +680,9 @@ function renderShelf(all){
 // めくって思い出すモード（ポイ活作戦の本丸：ポイント帳がそのまま暗記カードになる。
 // めくった裏に同じ日のメモを添える＝日記帳×暗記カード。文脈が思い出す手がかりになる）
 let flipMode=false;
+let flipOnly=null;   // 日付しぼりのめくり（おもいだしタイムから来たとき）
 document.getElementById("p-flip").onclick=()=>{
+  if(flipOnly){ flipOnly=null; flipMode=false; logEv("flip-off",{from:"review"}); renderPoints(); return; }
   flipMode=!flipMode; logEv(flipMode?"flip-on":"flip-off",{}); renderPoints(); };
 function renderFlip(list){
   const order=[...list].sort(()=>Math.random()-.5);
@@ -697,20 +708,23 @@ ${x.text}${clip?`
         logEv("flip-done",{n:order.length}); } }; }); }
 function renderPoints(){
   const all=allPoints();
-  const list=all.filter(x=>!pointsFilter||x.subject===pointsFilter).sort((a,b)=>b.id-a.id);
-  logEv("points-view",{n:list.length,subj:pointsFilter,flip:flipMode});
+  const list=all.filter(x=>(!pointsFilter||x.subject===pointsFilter)&&(!flipOnly||x.date===flipOnly)).sort((a,b)=>b.id-a.id);
+  logEv("points-view",{n:list.length,subj:pointsFilter,flip:flipMode,only:flipOnly});
   document.getElementById("points-count").textContent = all.length?`${all.length}個`:"";
   renderShelf(all);
-  document.getElementById("p-flip").textContent = flipMode?"📖 ふつうの一覧にもどる":"🎴 めくって思い出す";
+  document.getElementById("p-flip").textContent = flipOnly?"📖 ぜんぶのポイントにもどる":(flipMode?"📖 ふつうの一覧にもどる":"🎴 めくって思い出す");
   const cnts={}; all.forEach(x=>cnts[x.subject]=(cnts[x.subject]||0)+1);
   const vols=Object.values(cnts).reduce((a,c)=>a+Math.floor(c/VOL),0);
-  document.getElementById("points-cheer").textContent = flipMode
+  if(flipOnly){ const [,om,od]=flipOnly.split("-");
+    document.getElementById("points-cheer").textContent =
+      `${+om}月${+od}日に書いたポイントだけ、${list.length}枚。思い出してからめくってね。`; }
+  else document.getElementById("points-cheer").textContent = flipMode
     ? "順番はシャッフルしてあるよ。思い出してからめくるのがコツ。"
     : (pointsCheer(all.length,vols) || "きろくのとき「ポイント」欄に書いたことと、上で足したことが、ここにたまるよ。");
   if(flipMode){ renderFlip(list); return; }
   document.getElementById("points-list").innerHTML = list.length? list.map(x=>{
     const [,m,d]=x.date.split("-");
-    return `<button class="pt" data-d="${x.date}"><b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>${x.solo?`<span class="pdel" data-id="${x.id}" style="float:right; color:var(--danger)">🗑</span>`:""}
+    return `<button class="pt" data-d="${x.date}" data-id="${x.id}"><b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>${x.solo?`<span class="pdel" data-id="${x.id}" style="float:right; color:var(--danger)">🗑</span>`:""}<span class="pedit" data-id="${x.id}" data-solo="${x.solo?1:0}" style="float:right; margin-right:12px">✏️</span>
 ${x.text}</button>`;
   }).join("") : '<p class="small">ポイントはまだないよ。</p>';
   document.querySelectorAll("#points-list .pt").forEach(b=>{
@@ -718,6 +732,9 @@ ${x.text}</button>`;
       const [Y,M]=b.dataset.d.split("-"); calY=+Y; calM=+M-1; selDate=b.dataset.d;
       document.querySelector('.tab-bar button[data-view="cal"]').click();
       document.getElementById("day-title").scrollIntoView({behavior:"smooth",block:"start"}); }; });
+  document.querySelectorAll("#points-list .pedit").forEach(s=>{
+    s.onclick=ev=>{ ev.stopPropagation();
+      startEditPoint(s.closest(".pt"), +s.dataset.id, s.dataset.solo==="1"); }; });
   document.querySelectorAll("#points-list .pdel").forEach(s=>{
     s.onclick=ev=>{ ev.stopPropagation();
       if(confirm("このポイントを消す？")){
@@ -725,6 +742,27 @@ ${x.text}</button>`;
         points=points.filter(p=>p.id!==id);
         deletedPointIds.push(id); savePoints(); saveDeletedPoints(); scheduleSync();
         logEv("point-del",{}); renderPoints(); } }; }); }
+// なごみ要望第7号（2026-09-14「ポイント帳のカードの内容が編集できるようにしてほしい！」）
+// 消して書き直すと日付と並び順が変わってまう（9/11に1枚それで消えとる）ので、中身だけ直せる口を足す
+function startEditPoint(b,id,solo){
+  const src = solo ? points.find(p=>p.id===id) : entries.find(e=>e.id===id);
+  if(!src) return;
+  const cur = solo ? src.text : (src.point||"");
+  const box=document.createElement("div"); box.className="pt";
+  box.innerHTML=`<textarea id="pe-box" rows="4" style="width:100%; font:inherit; padding:8px; border:1.5px solid var(--mint-deep); border-radius:8px"></textarea>
+<div style="margin-top:8px; display:flex; gap:10px"><button type="button" id="pe-save">✔ なおす</button>
+<button type="button" id="pe-cancel">やめる</button></div>`;
+  b.replaceWith(box);
+  const ta=document.getElementById("pe-box"); ta.value=cur; ta.focus();
+  document.getElementById("pe-cancel").onclick=()=>renderPoints();
+  document.getElementById("pe-save").onclick=()=>{
+    const t=ta.value.trim();
+    if(!t){ alert("からっぽにはできんよ。消すときは🗑のほう。"); return; }
+    if(t===cur){ renderPoints(); return; }
+    if(solo){ src.text=t; src.mod=Date.now(); savePoints(); }
+    else { src.point=t; src.mod=Date.now(); store.save(entries); }
+    logEv("point-edit",{solo,len:t.length}); scheduleSync(); renderPoints(); };
+}
 // 単独ポイントの入力（要望第6号：思いついた時に、記録を止めんでも書ける）
 makeSubjButtons("p-subjects");
 document.getElementById("p-save").onclick=()=>{
