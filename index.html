@@ -588,11 +588,14 @@ function renderReview(){
   // ponytail: 提案は1日3件まで。復習したかどうかは記録しとらんので、同じ日が数日続けて出る。
   //           うるさがられたら「やった」ボタンを足す
   // 2026-09-21 ポイント帳と連携：その日にポイントがあれば「めくる」に直行する。
-  //   理由＝9/5〜9/21の17日間、おもいだしタイムは毎日出とったのに review-open が0。
-  //   同じ期間にポイント帳は毎週ひらかれとる＝押されとるのは自分で書いたカードのほうやった
+  // 2026-09-23 訂正：写真がある日は元どおりその日の記録へ（写真を見返すのが本来の使い方）。
+  //   なごみ本人「先生のかいせつで、へぇって思ったのを写真にとって、見返す使い方してて、
+  //   だから最近は写真がないから開いてないだけ」＝17日間の review-open 0 は「要らん」やなく
+  //   「写真が無い」やった（写真つき記録は9/1が最後、最後に開いたのも9/1のぶん）。
+  //   ポイント帳へ行くのは、写真が無くてポイントがある日だけ
   document.getElementById("review-list").innerHTML=due.slice(0,3).map(x=>{
     const [,m,d]=x.ds.split("-");
-    const np=allPoints().filter(p=>p.date===x.ds).length;
+    const np=x.photo?0:allPoints().filter(p=>p.date===x.ds).length;
     return `<button class="rv" data-d="${x.ds}" data-np="${np}">${+m}月${+d}日 ${np?`のポイント ${np}枚をめくる`:"にやったこと"}${x.i?"（2回目）":""}${x.photo?`　📷${x.photo}`:""}</button>`;
   }).join("");
   document.querySelectorAll("#review-list .rv").forEach(b=>{
