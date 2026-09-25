@@ -1034,8 +1034,10 @@ renderSyncUI();
 if(getToken()) syncNow();
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&getToken()) syncNow(); });
 // ネットが落ちても開けるように（sw.js・2026-09-25）。オフラインで開いた・回線が戻った、もログに残す
-if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js")
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js")
   .catch(e=>logEv("sw-fail",{m:String(e).slice(0,80)}));
+  // 効いたかを倉庫から確かめられるように（ctl:true＝このページは控えを持っとる）
+  navigator.serviceWorker.ready.then(()=>logEv("sw-ok",{ctl:!!navigator.serviceWorker.controller})); }
 if(!navigator.onLine) logEv("offline-open",{});
 window.addEventListener("offline",()=>logEv("offline",{}));
 window.addEventListener("online",()=>{ logEv("online",{}); if(getToken()) syncNow(); });
