@@ -846,11 +846,20 @@ function idbDel(k){ return idbOpen().then(db=>new Promise((res,rej)=>{
 function compressPhoto(file){ return new Promise((res,rej)=>{
   const r=new FileReader();
   r.onload=()=>{ const img=new Image();
-    img.onload=()=>{ const max=1280, sc=Math.min(1, max/Math.max(img.width,img.height));
-      const c=document.createElement("canvas");
-      c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
-      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      res(c.toDataURL("image/jpeg",0.72)); };
+    // 2026-09-27 パパ「記録は出来るだけ情報量多く残ってるに越したことない」：1280px/0.72 → 2560px/0.85。
+    // 1280pxでは赤字の長い書き込みと教材の問題文が読めんかった（9/26の社会の写真で確認）。
+    // 同期は中継サーバ（Netlify関数・1回6MBまで）を通るので、データURLが5MBを超えたら品質→大きさの順に下げる
+    img.onload=()=>{
+      const enc=(max,q)=>{ const sc=Math.min(1, max/Math.max(img.width,img.height));
+        const c=document.createElement("canvas");
+        c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+        return c.toDataURL("image/jpeg",q); };
+      let d=enc(2560,0.85);
+      if(d.length>5e6) d=enc(2560,0.7);
+      if(d.length>5e6) d=enc(1920,0.7);
+      logEv("photo-size",{kb:Math.round(d.length*0.75/1024)});
+      res(d); };
     img.onerror=rej; img.src=r.result; };
   r.onerror=rej; r.readAsDataURL(file); }); }
 let photoQueue=[];
