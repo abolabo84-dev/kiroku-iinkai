@@ -223,6 +223,7 @@
   <div class="card day-list">
     <h2 id="day-title">きょうの記録</h2>
     <div id="day-entries"></div>
+    <input type="file" id="late-photo-file" accept="image/*" multiple style="display:none">
   </div>
 </section>
 
@@ -615,10 +616,16 @@ function renderDay(){
   document.getElementById("day-entries").innerHTML = list.length? list.map(e=>
     `<div class="entry"><div><b>${e.subject}</b> ${e.unit||""}
       <div class="meta">${fmtMins(e.minutes)}・${e.source==="timer"?"⏱はかった":"✍️あとから"}${e.rating?["","😵","🤔","🙂","😊"][e.rating]:""}${Array.from({length:photoCount(e)},(_,i)=>` <button class="pv" data-k="${photoKey(e.id,i+1)}" style="border:1px solid var(--mint-deep);background:#fff;border-radius:8px;padding:1px 8px;cursor:pointer">📷 ${photoCount(e)>1?i+1+"枚目":"しゃしん"}</button>`).join("")}${e.memo?`<br>📝${e.memo}`:""}</div></div>
-      <button class="del" data-id="${e.id}">🗑</button></div>`).join("")
+      <div style="display:flex;gap:4px;align-items:center"><button class="late" data-id="${e.id}" title="あとから写真を足す" style="border:1px solid var(--mint-deep);background:#fff;border-radius:8px;padding:2px 8px;font-size:.8rem;cursor:pointer;white-space:nowrap">📷＋</button>
+      <button class="del" data-id="${e.id}">🗑</button></div></div>`).join("")
     : '<p class="small">この日の記録はまだないよ</p>';
   document.querySelectorAll("#day-entries .pv").forEach(b=>{
     b.onclick=()=>openPhoto(parseKey(b.dataset.k)); });
+  document.querySelectorAll("#day-entries .late").forEach(b=>{
+    b.onclick=()=>{ latePhotoEntryId=+b.dataset.id; logEv("photo-late-open",{entryId:latePhotoEntryId});
+      const n=+(localStorage.getItem("kiroku-pg-late")||0);
+      const open=()=>document.getElementById("late-photo-file").click();
+      if(n<3){ localStorage.setItem("kiroku-pg-late",String(n+1)); showLateGuide(open); } else open(); }; });
   document.querySelectorAll("#day-entries .del").forEach(b=>{
     b.onclick=()=>{ if(confirm("この記録を消す？")){
       const id=+b.dataset.id; const pc=photoCount(entries.find(e=>e.id===id));
@@ -934,6 +941,40 @@ document.getElementById("m-photo-file").onchange=async ev=>{
   catch(err){ logEv("photo-attach-fail",{reason:"compress",err:String(err).slice(0,80)});
     alert("写真が読みこめへんかった…もう一回えらんでね"); }
   ev.target.value=""; };
+
+// ---- あとから写真を足す（2026-09-26 パパ採択）----
+// 前のノートを暇なときに撮って、カレンダーのその日の記録につける口。
+// 手入力で写真だけの記録を作ると勉強時間に偽の記録が混ざるので、既存の記録に足す形にした。
+// 理科・社会のノート写真が増えると、教科をまたいだ分析ができるようになる（今ある写真はほぼ算数）
+let latePhotoEntryId=null;
+function showLateGuide(onOk){
+  const ov=document.createElement("div");
+  ov.style.cssText="position:fixed;inset:0;background:rgba(47,92,77,.55);z-index:98;display:flex;align-items:center;justify-content:center;padding:20px";
+  ov.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:420px;padding:18px 20px;max-height:90vh;overflow:auto">
+    <h2 style="font-size:1rem;color:#2f5c4d;margin:0 0 8px">📷 前のノートを撮るときのコツ</h2>
+    <ul style="font-size:.88rem;line-height:1.9;padding-left:1.3em;margin:0 0 6px">
+      <li>📄 1回に<b>1ページずつ</b>（見開きは2枚に分けて）。<b>何枚でもまとめて選べる</b>よ</li>
+      <li>🔢 ページのいちばん上の<b>「第◯回」や単元名、日付</b>が写るように（どの記録のノートか分かるように）</li>
+      <li>📘 できたら、問題が載ってる<b>教材のページも1枚</b>いっしょに（なくてもOK）</li>
+      <li>☀️ 明るいところで、<b>真上から</b></li>
+      <li>⭕ まるつけの赤は、そのまま写ってて大丈夫</li>
+    </ul>
+    <p style="font-size:.78rem;color:#5b6b63;margin:0 0 6px">理科と社会のノートがあると、教科をまたいだ分析ができるようになるんだ。</p>
+    <p style="font-size:.72rem;color:#98a49e;margin:0 0 10px">ぜんぶじゃなくていいよ。ひまなときに、何ページかで十分。</p>
+    <button id="lg-ok" class="btn-main" style="margin-top:0">わかった！写真をえらぶ</button>
+    <button id="lg-no" style="display:block;margin:8px auto 0;border:none;background:none;color:#98a49e">やめとく</button></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#lg-ok").onclick=()=>{ ov.remove(); onOk(); };
+  ov.querySelector("#lg-no").onclick=()=>{ ov.remove(); logEv("photo-late-cancel",{}); }; }
+document.getElementById("late-photo-file").onchange=async ev=>{
+  const files=[...ev.target.files]; ev.target.value="";
+  const id=latePhotoEntryId; if(!files.length||!id) return;
+  let ok=0;
+  for(const f of files){ try{ attachPhotoDurl(await compressPhoto(f), id); ok++; }
+    catch(err){ logEv("photo-attach-fail",{reason:"late",entryId:id,err:String(err).slice(0,80)}); } }
+  logEv("photo-late",{entryId:id,n:ok,of:files.length});
+  renderDay(); renderCal();
+  if(ok<files.length) alert(`${files.length}枚のうち${files.length-ok}枚がつけられへんかった…もう一回ためしてね`); };
 
 // ---- 自動同期（保存先は今までどおり非公開リポ。経路だけ中継サーバ経由に変更） ----
 // 端末に置くのは「あいことば」だけ。GitHubのトークンは中継サーバ側にしか無い。
