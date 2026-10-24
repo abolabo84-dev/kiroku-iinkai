@@ -334,8 +334,31 @@ document.querySelectorAll(".tab-bar button").forEach(b=>{
     logEv("tab",{view:b.dataset.view});
     if(b.dataset.view==="cal") renderCal();
     if(b.dataset.view==="points") renderPoints();
-    if(b.dataset.view==="stats") renderStats(); };
+    if(b.dataset.view==="stats") renderStats();
+    checkTabBar("tab"); };
 });
+
+// ---- タブの帯が画面のまん中に浮く（2026-10-24 なごみ報告：iPad横向き、アプリを開き直すと直る） ----
+// iOSで、キーボードやアプリの切りかえのあと fixed の帯が古い画面の高さの位置に残る、と見とる（未確認）。
+// ずれを見つけたら記録して、帯を一回外して付け直す。付け直しで直ったかも記録する（効かんかったら別の手を考える）。
+let lastVp="";
+function checkTabBar(why){
+  const a=document.activeElement;
+  if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;   // キーボードが出とる間は、ずれて当然なので見ない
+  const bar=document.querySelector(".tab-bar"), vv=window.visualViewport;
+  const vh=Math.round(vv ? vv.height+vv.offsetTop : innerHeight);
+  const vp=[innerHeight, vh, document.documentElement.clientHeight, screen.width, screen.height].join(",");
+  if(vp!==lastVp){ lastVp=vp; logEv("vp",{why, ih:innerHeight, vh, ch:document.documentElement.clientHeight, sw:screen.width, sh:screen.height}); }
+  const bottom=Math.round(bar.getBoundingClientRect().bottom);
+  if(Math.abs(bottom-vh)<=2) return;
+  bar.style.display="none"; void bar.offsetHeight; bar.style.display="";
+  window.scrollTo(window.scrollX, window.scrollY);
+  logEv("tabbar-off",{why, bottom, vh, ih:innerHeight, after:Math.round(bar.getBoundingClientRect().bottom)});
+}
+document.addEventListener("focusout",()=>setTimeout(()=>checkTabBar("focusout"),400));
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) setTimeout(()=>checkTabBar("show"),400); });
+if(window.visualViewport) visualViewport.addEventListener("resize",()=>setTimeout(()=>checkTabBar("resize"),400));
+window.addEventListener("orientationchange",()=>setTimeout(()=>checkTabBar("rotate"),600));
 
 // ---- 教科ボタン ----
 function makeSubjButtons(containerId){
