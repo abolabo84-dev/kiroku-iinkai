@@ -340,7 +340,10 @@ document.querySelectorAll(".tab-bar button").forEach(b=>{
 
 // ---- タブの帯が画面のまん中に浮く（2026-10-24 なごみ報告：iPad横向き、アプリを開き直すと直る） ----
 // iOSで、キーボードやアプリの切りかえのあと fixed の帯が古い画面の高さの位置に残る、と見とる（未確認）。
-// ずれを見つけたら記録して、帯を一回外して付け直す。付け直しで直ったかも記録する（効かんかったら別の手を考える）。
+// ずれを見つけたら記録して、帯を付け直す。付け直しで直ったかも記録する。
+// 10/25・10/26：「一回外して付け直す」は2回とも効かんかった（bottom 1048・vh 778・after 1048＝縦向きの高さのまま）。
+// 下の端（bottom:0）の基準が古い高さのまま残っとると見て、ずれたら「上から何px」で置き直す（fix:"top"）。
+// いったん上から置いたら、そのあとは画面の高さが変わるたびに置き直す（縦横どっちでも合う）。
 let lastVp="";
 function checkTabBar(why){
   const a=document.activeElement;
@@ -349,16 +352,18 @@ function checkTabBar(why){
   const vh=Math.round(vv ? vv.height+vv.offsetTop : innerHeight);
   const vp=[innerHeight, vh, document.documentElement.clientHeight, screen.width, screen.height].join(",");
   if(vp!==lastVp){ lastVp=vp; logEv("vp",{why, ih:innerHeight, vh, ch:document.documentElement.clientHeight, sw:screen.width, sh:screen.height}); }
+  if(bar.dataset.pin) bar.style.top=(vh-bar.offsetHeight)+"px";
   const bottom=Math.round(bar.getBoundingClientRect().bottom);
   if(Math.abs(bottom-vh)<=2) return;
-  bar.style.display="none"; void bar.offsetHeight; bar.style.display="";
-  window.scrollTo(window.scrollX, window.scrollY);
-  logEv("tabbar-off",{why, bottom, vh, ih:innerHeight, after:Math.round(bar.getBoundingClientRect().bottom)});
+  const pinned=!!bar.dataset.pin;
+  bar.dataset.pin="1"; bar.style.bottom="auto"; bar.style.top=(vh-bar.offsetHeight)+"px";
+  logEv("tabbar-off",{why, bottom, vh, ih:innerHeight, fix:"top", pinned, after:Math.round(bar.getBoundingClientRect().bottom)});
 }
 document.addEventListener("focusout",()=>setTimeout(()=>checkTabBar("focusout"),400));
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) setTimeout(()=>checkTabBar("show"),400); });
 if(window.visualViewport) visualViewport.addEventListener("resize",()=>setTimeout(()=>checkTabBar("resize"),400));
 window.addEventListener("orientationchange",()=>setTimeout(()=>checkTabBar("rotate"),600));
+window.addEventListener("resize",()=>setTimeout(()=>checkTabBar("wresize"),400));
 
 // ---- 教科ボタン ----
 function makeSubjButtons(containerId){
