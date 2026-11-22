@@ -100,6 +100,9 @@
   #points-list .pt b{color:#2f5c4d;}
   #points-list .pt .u{color:#8a9a90; font-size:.75rem;}
   #points-list .pt.face{background:var(--soft); border-style:dashed; border-color:var(--mint-deep);}
+  #points-list .pt.q{background:#fffbea; border-color:#e6c86a;}
+  #stats-grow .gr{padding:8px 0; border-bottom:1px dashed var(--mint); font-size:.88rem; line-height:1.6;}
+  #stats-grow .gr:last-child{border-bottom:none;}
   /* 教科ごとの本が育つ本棚（ポイ活作戦・パパ発案の③） */
   #points-shelf{margin:2px 0 12px;}
   #points-shelf .shelf-row{display:flex; align-items:flex-end; gap:6px;
@@ -236,6 +239,8 @@
     <label>ポイント（思いついたら、いつでも）</label>
     <textarea id="p-text"></textarea>
     <button class="btn-main" id="p-save">📒 ポイント帳に入れる</button>
+    <button id="p-q" style="display:block; width:100%; margin-top:8px; padding:12px; font-size:1rem; font-family:inherit; color:var(--ink); background:#fffbea; border:1.5px solid #e6c86a; border-radius:12px; cursor:pointer">❓「なんで？」カードにする</button>
+    <p class="small" style="margin:6px 0 0">「なんで？」「ほんと？」と思ったことは、❓カードにしておくと分析係が調べてレポートで答えるよ。分かったら ✏️ で答えに書きかえてね。</p>
   </div>
   <div class="card bandage">
     <h2>📒 ポイント帳　<span id="points-count" style="font-size:.8rem; color:var(--mint-deep)"></span></h2>
@@ -255,6 +260,11 @@
     <h2>📊 この7日間の教科バランス</h2>
     <div id="stats-bars"></div>
     <p class="small">合計：<span id="stats-total"></span></p>
+  </div>
+  <div class="card">
+    <h2>🌱 なかよくなってきた教材</h2>
+    <p class="small" style="margin:0 0 6px">はじめは😵や🤔だったのに、いまは🙂や😊がついている教材だよ。</p>
+    <div id="stats-grow"></div>
   </div>
   <div class="card">
     <h2>🗓 記録のあゆみ</h2>
@@ -673,6 +683,9 @@ let pointsFilter=null; // null=ぜんぶ
       logEv("points-filter",{subj:s}); renderPoints(); };
     c.appendChild(b); }); }
 // 記録についたポイントと、単独ポイントを1つの棚にまとめる
+// ❓カード（2026-11-23 パパ「苦手を得意に、の前に苦手を好きに」）：本人の「なんで？」をカードにして、分析係が答える。
+// 答えが分かったら✏️で書きかえる＝❓が消えてふつうのカードになる。❓のうちは本棚の冊数・めくるには入れん
+const isQ=x=>/^❓/.test(x.text||"");
 function allPoints(){
   return [
     ...entries.filter(e=>e.point).map(e=>({id:e.id,date:e.date,subject:e.subject,unit:e.unit,text:e.point,solo:false})),
@@ -745,10 +758,10 @@ ${x.text}${clip?`
         document.getElementById("points-cheer").textContent=`ぜんぶめくった！　${order.length}枚、おつかれさま。`;
         logEv("flip-done",{n:order.length}); } }; }); }
 function renderPoints(){
-  const all=allPoints();
-  const list=all.filter(x=>(!pointsFilter||x.subject===pointsFilter)&&(!flipOnly||x.date===flipOnly)).sort((a,b)=>b.id-a.id);
+  const every=allPoints(), all=every.filter(x=>!isQ(x)), qn=every.length-all.length;
+  const list=every.filter(x=>(!pointsFilter||x.subject===pointsFilter)&&(!flipOnly||x.date===flipOnly)&&!(flipMode&&isQ(x))).sort((a,b)=>b.id-a.id);
   logEv("points-view",{n:list.length,subj:pointsFilter,flip:flipMode,only:flipOnly});
-  document.getElementById("points-count").textContent = all.length?`${all.length}個`:"";
+  document.getElementById("points-count").textContent = all.length?`${all.length}個${qn?`（❓${qn}）`:""}`:"";
   renderShelf(all);
   document.getElementById("p-flip").textContent = flipOnly?"📖 ぜんぶのポイントにもどる":(flipMode?"📖 ふつうの一覧にもどる":"🎴 めくって思い出す");
   const cnts={}; all.forEach(x=>cnts[x.subject]=(cnts[x.subject]||0)+1);
@@ -762,7 +775,7 @@ function renderPoints(){
   if(flipMode){ renderFlip(list); return; }
   document.getElementById("points-list").innerHTML = list.length? list.map(x=>{
     const [,m,d]=x.date.split("-");
-    return `<button class="pt" data-d="${x.date}" data-id="${x.id}"><b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>${x.solo?`<span class="pdel" data-id="${x.id}" style="float:right; color:var(--danger)">🗑</span>`:""}<span class="pedit" data-id="${x.id}" data-solo="${x.solo?1:0}" style="float:right; margin-right:12px">✏️</span>
+    return `<button class="pt${isQ(x)?" q":""}" data-d="${x.date}" data-id="${x.id}"><b>${+m}月${+d}日　${x.subject}</b>　<span class="u">${x.unit||""}</span>${x.solo?`<span class="pdel" data-id="${x.id}" style="float:right; color:var(--danger)">🗑</span>`:""}<span class="pedit" data-id="${x.id}" data-solo="${x.solo?1:0}" style="float:right; margin-right:12px">✏️</span>
 ${x.text}</button>`;
   }).join("") : '<p class="small">ポイントはまだないよ。</p>';
   document.querySelectorAll("#points-list .pt").forEach(b=>{
@@ -813,6 +826,17 @@ document.getElementById("p-save").onclick=()=>{
   document.querySelectorAll("#p-subjects button").forEach(x=>x.classList.remove("sel"));
   renderPoints(); };
 
+document.getElementById("p-q").onclick=()=>{
+  const subj=selectedSubj("p-subjects")||"その他";
+  let text=document.getElementById("p-text").value.trim();
+  if(!text){ logEv("q-add-fail",{}); alert("「なんで？」と思ったことを書いてね"); return; }
+  if(!/^❓/.test(text)) text="❓ "+text;
+  points.push({id:Date.now(), date:ymd(), subject:subj, text});
+  savePoints(); logEv("q-add",{subject:subj,len:text.length,hadSubj:!!selectedSubj("p-subjects")}); scheduleSync();
+  document.getElementById("p-text").value="";
+  document.querySelectorAll("#p-subjects button").forEach(x=>x.classList.remove("sel"));
+  renderPoints(); };
+
 // ---- ぶんせき ----
 const SUBJ_COLORS={
   "算数":{bg:"#aecdf0",line:"#4a7fd0"},"国語":{bg:"#f3bcc6",line:"#d05a6e"},
@@ -831,12 +855,35 @@ function renderStats(){
       <span class="val">${fmtMins(bySubj[s])}</span></div>`).join("") || '<p class="small">この7日間の記録はまだないよ</p>';
   const tot=wk.reduce((a,e)=>a+e.minutes,0);
   document.getElementById("stats-total").textContent=fmtMins(tot);
+  renderGrow();
   const allDays=new Set(entries.map(e=>e.date)).size;
   document.getElementById("stats-summary").textContent=
     `記録した日数：${allDays}日 ／ 記録の数：${entries.length}件`;
   document.getElementById("stats-msg").textContent = tot>0
     ? "今週もよくがんばってるね。休憩と睡眠も、立派な勉強のうちだからね。"
     : "記録はいつからでも始められるよ。あせらなくて大丈夫。"; }
+
+// なかよくなってきた教材（2026-11-23）：同じ教材で、前に😵🤔がついて、いちばん新しい手ごたえが🙂😊のもの。
+// くらべるのは本人の過去とだけ。まだ😵🤔のままの教材は出さん（「苦手」のラベルを貼らんため）
+const FACE={1:"😵",2:"🤔",3:"🙂",4:"😊"};
+function growList(){
+  const g={};
+  // テスト類（過去問・週テスト・模試）は回ごとに中身も学校もちがうので、同じ教材としてはくらべん
+  entries.filter(e=>e.rating&&(e.unit||"").trim()&&!/過去問|週テスト|判定テスト|組分け|模試/.test(e.unit)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.id-b.id)
+    .forEach(e=>{ const k=e.subject+"｜"+e.unit.trim(); (g[k]=g[k]||[]).push(e); });
+  const out=[];
+  Object.values(g).forEach(v=>{
+    const low=v.find(e=>e.rating<=2); const last=v[v.length-1];
+    if(low&&last.rating>=3&&last.date>low.date) out.push({low,last});
+  });
+  return out.sort((a,b)=>a.last.date<b.last.date?1:-1); }
+function renderGrow(){
+  const md=d=>{ const [,m,dd]=d.split("-"); return `${+m}/${+dd}`; };
+  const list=growList();
+  document.getElementById("stats-grow").innerHTML = list.length ? list.slice(0,8).map(({low,last})=>
+    `<div class="gr"><b>${last.subject}　${last.unit.trim()}</b><br>はじめ ${FACE[low.rating]}（${md(low.date)}） → さいきん ${FACE[last.rating]}（${md(last.date)}）</div>`).join("")
+    : '<p class="small">😵や🤔がついた教材に、あとで🙂や😊がつくと、ここに出てくるよ。</p>';
+  logEv("grow-view",{n:list.length}); }
 
 // ---- 書き出し／読み込み ----
 document.getElementById("btn-export").onclick=()=>{
