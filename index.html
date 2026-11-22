@@ -263,7 +263,7 @@
   </div>
   <div class="card">
     <h2>🌱 なかよくなってきた教材</h2>
-    <p class="small" style="margin:0 0 6px">はじめは😵や🤔だったのに、いまは🙂や😊がついている教材だよ。</p>
+    <p class="small" style="margin:0 0 6px">前に😵や🤔がついたことがあって、いまは🙂や😊がついている教材だよ。</p>
     <div id="stats-grow"></div>
   </div>
   <div class="card">
@@ -634,7 +634,7 @@ function renderReview(){
   //   ポイント帳へ行くのは、写真が無くてポイントがある日だけ
   document.getElementById("review-list").innerHTML=due.slice(0,3).map(x=>{
     const [,m,d]=x.ds.split("-");
-    const np=x.photo?0:allPoints().filter(p=>p.date===x.ds).length;
+    const np=x.photo?0:allPoints().filter(p=>p.date===x.ds&&!isQ(p)).length;   // ❓カードはめくらんので数えん
     return `<button class="rv" data-d="${x.ds}" data-np="${np}">${+m}月${+d}日 ${np?`のポイント ${np}枚をめくる`:"にやったこと"}${x.i?"（2回目）":""}${x.photo?`　📷${x.photo}`:""}</button>`;
   }).join("");
   document.querySelectorAll("#review-list .rv").forEach(b=>{
@@ -685,7 +685,7 @@ let pointsFilter=null; // null=ぜんぶ
 // 記録についたポイントと、単独ポイントを1つの棚にまとめる
 // ❓カード（2026-11-23 パパ「苦手を得意に、の前に苦手を好きに」）：本人の「なんで？」をカードにして、分析係が答える。
 // 答えが分かったら✏️で書きかえる＝❓が消えてふつうのカードになる。❓のうちは本棚の冊数・めくるには入れん
-const isQ=x=>/^❓/.test(x.text||"");
+function isQ(x){ return /^❓/.test(x.text||""); }   // 関数宣言＝おもいだしタイムから先に呼ばれても大丈夫
 function allPoints(){
   return [
     ...entries.filter(e=>e.point).map(e=>({id:e.id,date:e.date,subject:e.subject,unit:e.unit,text:e.point,solo:false})),
@@ -881,7 +881,7 @@ function renderGrow(){
   const md=d=>{ const [,m,dd]=d.split("-"); return `${+m}/${+dd}`; };
   const list=growList();
   document.getElementById("stats-grow").innerHTML = list.length ? list.slice(0,8).map(({low,last})=>
-    `<div class="gr"><b>${last.subject}　${last.unit.trim()}</b><br>はじめ ${FACE[low.rating]}（${md(low.date)}） → さいきん ${FACE[last.rating]}（${md(last.date)}）</div>`).join("")
+    `<div class="gr"><b>${last.subject}　${last.unit.trim()}</b><br>まえ ${FACE[low.rating]}（${md(low.date)}） → さいきん ${FACE[last.rating]}（${md(last.date)}）</div>`).join("")
     : '<p class="small">😵や🤔がついた教材に、あとで🙂や😊がつくと、ここに出てくるよ。</p>';
   logEv("grow-view",{n:list.length}); }
 
