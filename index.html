@@ -240,7 +240,7 @@
     <textarea id="p-text"></textarea>
     <button class="btn-main" id="p-save">📒 ポイント帳に入れる</button>
     <button id="p-q" style="display:block; width:100%; margin-top:8px; padding:12px; font-size:1rem; font-family:inherit; color:var(--ink); background:#fffbea; border:1.5px solid #e6c86a; border-radius:12px; cursor:pointer">❓「なんで？」カードにする</button>
-    <p class="small" style="margin:6px 0 0">「なんで？」「ほんと？」と思ったことは、❓カードにしておくと分析係が調べてレポートで答えるよ。分かったら ✏️ で答えに書きかえてね。</p>
+    <p class="small" style="margin:6px 0 0">「なんで？」「ほんと？」は、自分で調べるきっかけのメモ。調べて分かったこと・分からんかったことも書いておくと、分析係がほかの資料も出して、いっしょに考えるよ。答えを決めるのはきみ。納得できたら ✏️ で書きかえてね。</p>
   </div>
   <div class="card bandage">
     <h2>📒 ポイント帳　<span id="points-count" style="font-size:.8rem; color:var(--mint-deep)"></span></h2>
@@ -683,7 +683,8 @@ let pointsFilter=null; // null=ぜんぶ
       logEv("points-filter",{subj:s}); renderPoints(); };
     c.appendChild(b); }); }
 // 記録についたポイントと、単独ポイントを1つの棚にまとめる
-// ❓カード（2026-11-23 パパ「苦手を得意に、の前に苦手を好きに」）：本人の「なんで？」をカードにして、分析係が答える。
+// ❓カード（2026-11-23 パパ「苦手を得意に、の前に苦手を好きに」）：本人の「なんで？」をカードにする。
+// 2026-11-25 文言変更：なごみ「AIになんでも聞いて解決しちゃダメ…自分でちゃんと調べる」→パパ「納得できる解決まで一緒に模索する議論の相棒であり入口」。分析係は答えを配らず、資料と出どころを出して一緒に考える
 // 答えが分かったら✏️で書きかえる＝❓が消えてふつうのカードになる。❓のうちは本棚の冊数・めくるには入れん
 function isQ(x){ return /^❓/.test(x.text||""); }   // 関数宣言＝おもいだしタイムから先に呼ばれても大丈夫
 function allPoints(){
